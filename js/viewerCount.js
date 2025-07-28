@@ -3,11 +3,13 @@
  * 치지직 사이드바에서 시청자 수를 선택적으로 숨기는 기능
  */
 
-// 시청자 수 처리 상태 관리
+// 시청자 수 처리 상태 관리 (고도화)
 let viewerCountProcessing = false;
 let viewerCountDebounceTimer = null;
 let masterViewerCountTimer = null;
 let lastViewerCountState = null;
+let globalViewerObserver = null;
+let processedElements = new WeakSet(); // 메모리 누수 방지
 
 /**
  * 시청자 수 관리 클래스
@@ -22,6 +24,9 @@ class ViewerCountManager {
     
     // CSS 스타일 주입
     this.injectCSS();
+    
+    // 고도화된 실시간 모니터링 시작
+    this.startAdvancedMonitoring();
   }
 
   /**
@@ -83,7 +88,7 @@ class ViewerCountManager {
   }
 
   /**
-   * 모든 시청자 수 숨기기
+   * 모든 시청자 수 숨기기 (성능 최적화)
    * @param {Element} container - 검색할 컨테이너 (기본값: document)
    */
   hideAll(container = document) {
@@ -96,60 +101,218 @@ class ViewerCountManager {
       return;
     }
     
+    // 성능 측정 시작
+    const startTime = performance.now();
     this.processing = true;
     
     try {
-      // 시청자 수 요소 셀렉터들 (라이브 페이지 강화)
+      // 시청자 수 요소 셀렉터들 (포괄적 강화)
       const viewerCountSelectors = [
-        // 사이드바 시청자 수
+        // === 1단계: 정확한 셀렉터 (최고 성능) ===
+        
+        // 카드 뷰 시청자 수 (새로 추가)
+        '.thumbnail_badge_container__sMIz3',
+        '.video_card_container__urjO6 .thumbnail_badge_container__sMIz3',
+        '.video_card_description__2sUfw span.thumbnail_badge_container__sMIz3',
+        
+        // 라이브 페이지 현재 시청자 수 (새로 추가)
+        '.video_information_count__Y05sI',
+        '.video_information_data__w3P+x strong',
+        '.video_information_row__HrQ0z strong',
+        
+        // 기존 사이드바 시청자 수
         '.navigator_count__kpr6-', '.navigator_count__db5Av',
-        'em[class*="count"]', 'span[class*="count"]',
-        'em[class*="viewer"]', 'span[class*="viewer"]',
-        '[class*="live_count"]', '[class*="viewer_count"]',
         '.home_recommend_live_count__7Or3N',
         
-        // 라이브 페이지 현재 시청자 수 (강화된 셀렉터)
+        // 기존 라이브 페이지
         '.video_information_count__VdSfG',
-        '.live_information_player__lYPjg [class*="video_information_count"]',
         '.live_information_player__lYPjg strong',
-        '.live_information_player__lYPjg [class*="count"]',
         
-        // 추가 라이브 페이지 시청자 수 셀렉터
-        '[class*="live_information"] [class*="count"]',
-        '[class*="player"] [class*="count"]',
+        // === 2단계: 패턴 기반 백업 셀렉터 ===
+        
+        // 카드 뷰 백업 (클래스 변경 대응)
+        '[class*="thumbnail_badge"] span:not([class*="live"])',
+        '[class*="video_card"] [class*="badge"] span',
+        '[class*="card_description"] span:not(.blind)',
+        
+        // 라이브 페이지 백업
         '[class*="video_information"] strong',
-        '.live_information_text__TyGBp strong',
-        '.video_information_text__+uTx5 strong',
+        '[class*="information_data"] strong',
+        '[class*="information_row"] strong',
+        '[class*="live_information"] [class*="count"]',
         
-        // 더 넓은 범위 셀렉터 (라이브 페이지 전용)
-        '.live_information_player__lYPjg span:not([class*="live_information_title"])',
-        '.live_information_player__lYPjg em:not([class*="live_information_title"])'
+        // 범용 백업 셀렉터
+        'em[class*="count"]', 'span[class*="count"]',
+        'strong[class*="count"]', 'div[class*="count"]',
+        'em[class*="viewer"]', 'span[class*="viewer"]',
+        '[class*="live_count"]', '[class*="viewer_count"]',
+        
+        // === 3단계: 광범위 검색 (최후 보완) ===
+        
+        // 위치 기반 검색
+        '.video_card_container__urjO6 span:not(.blind):not([class*="title"]):not([class*="name"])',
+        '[class*="information"] span:not(.blind):not([class*="title"]):not([class*="name"])',
+        '[class*="player"] span:not(.blind):not([class*="title"]):not([class*="name"])',
+        
+        // 태그 기반 광범위 검색 (성능상 마지막에 배치)
+        'span:not(.blind):not([class*="title"]):not([class*="name"]):not([class*="tag"])',
+        'strong:not([class*="title"]):not([class*="name"]):not([class*="tag"])'
       ];
 
       let hiddenCount = 0;
 
-      viewerCountSelectors.forEach(selector => {
+      // === 3단계 검색 시스템 실행 ===
+      
+      // 1단계: 정확한 셀렉터 우선 처리 (성능 최적화)
+      const tier1Selectors = viewerCountSelectors.slice(0, 15); // 정확한 셀렉터들
+      let tier1Success = false;
+      
+      tier1Selectors.forEach(selector => {
         try {
           const elements = container.querySelectorAll(selector);
           elements.forEach(element => {
             if (this.shouldHideElement(element)) {
               this.hideElement(element);
               hiddenCount++;
+              tier1Success = true;
             }
           });
         } catch (error) {
-          window.ChzzkLogger?.warn('❌ Error with selector:', selector, error.message);
+          window.ChzzkLogger?.warn('❌ Tier 1 selector error:', selector, error.message);
         }
       });
 
-      // 숫자 패턴으로 시청자 수 찾기 (보조 방법)
-      this.hideByNumberPattern(container);
+      // 2단계: 패턴 기반 백업 검색 (1단계에서 부족한 경우)
+      if (!tier1Success || hiddenCount < 3) {
+        window.ChzzkLogger?.debug('🔍 Executing Tier 2 pattern-based search...');
+        
+        const tier2Selectors = viewerCountSelectors.slice(15, 30); // 패턴 기반 셀렉터들
+        tier2Selectors.forEach(selector => {
+          try {
+            const elements = container.querySelectorAll(selector);
+            elements.forEach(element => {
+              if (this.shouldHideElement(element)) {
+                this.hideElement(element);
+                hiddenCount++;
+              }
+            });
+          } catch (error) {
+            window.ChzzkLogger?.warn('❌ Tier 2 selector error:', selector, error.message);
+          }
+        });
+      }
 
-      window.ChzzkLogger?.viewer(`Hidden ${hiddenCount} viewer count elements`);
+      // 3단계: 광범위 텍스트 패턴 스캔 (최후 보완)
+      if (hiddenCount < 5) {
+        window.ChzzkLogger?.debug('🔍 Executing Tier 3 comprehensive text scan...');
+        
+        const tier3Selectors = viewerCountSelectors.slice(30); // 광범위 셀렉터들
+        tier3Selectors.forEach(selector => {
+          try {
+            const elements = container.querySelectorAll(selector);
+            elements.forEach(element => {
+              if (this.shouldHideElement(element)) {
+                this.hideElement(element);
+                hiddenCount++;
+              }
+            });
+          } catch (error) {
+            window.ChzzkLogger?.warn('❌ Tier 3 selector error:', selector, error.message);
+          }
+        });
+
+        // 최후 수단: 전체 텍스트 노드 스캔
+        this.hideByAdvancedTextPattern(container);
+      }
+
+      // 성능 측정 및 보고
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      
+      window.ChzzkLogger?.viewer(`✅ Hidden ${hiddenCount} elements (3-tier) in ${duration.toFixed(2)}ms`);
+      
+      // 성능 경고 (500ms 이상 소요 시)
+      if (duration > 500) {
+        window.ChzzkLogger?.warn(`⚠️ Performance warning: hideAll took ${duration.toFixed(2)}ms`);
+      }
+      
     } catch (error) {
       window.ChzzkLogger?.error('❌ Error hiding viewer counts:', error);
     } finally {
       this.processing = false;
+    }
+  }
+
+  /**
+   * 배치 처리로 대량 요소 숨기기 (성능 최적화)
+   * @private
+   * @param {Element[]} elements - 처리할 요소 배열
+   * @param {number} batchSize - 배치 크기
+   */
+  async processBatch(elements, batchSize = 50) {
+    window.ChzzkLogger?.debug(`🔄 Processing ${elements.length} elements in batches of ${batchSize}...`);
+    
+    for (let i = 0; i < elements.length; i += batchSize) {
+      const batch = elements.slice(i, i + batchSize);
+      
+      // 각 배치를 동기적으로 처리
+      batch.forEach(element => {
+        if (!processedElements.has(element) && this.shouldHideElement(element)) {
+          this.hideElement(element);
+          processedElements.add(element); // 중복 처리 방지
+        }
+      });
+      
+      // 대량 처리 시 브라우저 블로킹 방지
+      if (elements.length > 100 && i + batchSize < elements.length) {
+        await new Promise(resolve => setTimeout(resolve, 1));
+      }
+    }
+  }
+
+  /**
+   * 메모리 효율적인 요소 수집
+   * @private
+   * @param {string[]} selectors - 셀렉터 배열
+   * @param {Element} container - 검색 컨테이너
+   * @returns {Element[]} 수집된 요소 배열
+   */
+  collectElementsEfficiently(selectors, container) {
+    const elements = [];
+    const seenElements = new Set();
+    
+    // 메모리 효율성을 위해 한 번에 하나씩 처리
+    selectors.forEach(selector => {
+      try {
+        const nodeList = container.querySelectorAll(selector);
+        
+        // NodeList를 효율적으로 순회
+        for (let i = 0; i < nodeList.length; i++) {
+          const element = nodeList[i];
+          
+          // 중복 제거 (WeakSet 대신 Set 사용으로 메모리 최적화)
+          if (!seenElements.has(element)) {
+            seenElements.add(element);
+            elements.push(element);
+          }
+        }
+      } catch (error) {
+        window.ChzzkLogger?.warn(`❌ Selector error: ${selector}`, error.message);
+      }
+    });
+    
+    return elements;
+  }
+
+  /**
+   * 가비지 컬렉션 최적화
+   * @private
+   */
+  optimizeMemory() {
+    // 주기적으로 처리된 요소 추적 초기화 (메모리 누수 방지)
+    if (processedElements.size > 1000) {
+      window.ChzzkLogger?.debug('🧹 Cleaning up processed elements cache...');
+      processedElements = new WeakSet();
     }
   }
 
@@ -216,7 +379,7 @@ class ViewerCountManager {
   }
 
   /**
-   * 시청자 수 패턴인지 확인
+   * 시청자 수 패턴인지 확인 (강화된 버전)
    * @private
    * @param {string} text - 검사할 텍스트
    * @returns {boolean} 시청자 수 패턴 여부
@@ -224,20 +387,60 @@ class ViewerCountManager {
   isViewerCountPattern(text) {
     if (!text) return false;
 
-    // LIVE 텍스트나 한국어 '라이브'는 제외
-    if (text.includes('LIVE') || text.includes('라이브')) {
+    // 정규화: 공백 제거 및 소문자 변환
+    const normalizedText = text.trim().replace(/\s+/g, ' ');
+
+    // === 강화된 제외 패턴 ===
+    const excludePatterns = [
+      // 기본 제외
+      /LIVE|라이브|스트리밍/i,
+      // 게임 및 카테고리
+      /talk|게임|카테고리|category/i,
+      // 스트리머 관련
+      /스트리머|채널|channel|streamer/i,
+      // 시간 관련  
+      /시간|분|초|hour|minute|second/i,
+      // 기타 UI 요소
+      /팔로우|follow|구독|subscribe/i,
+      // 태그 관련
+      /태그|tag|에스더|카론/i
+    ];
+
+    if (excludePatterns.some(pattern => pattern.test(normalizedText))) {
       return false;
     }
 
-    // 숫자 + 단위 패턴 (예: "1.2만", "523", "1,234")
+    // === 강화된 시청자 수 패턴 ===
     const viewerPatterns = [
-      /^\d{1,3}(,\d{3})*$/,  // 쉼표로 구분된 숫자: 1,234
-      /^\d+\.?\d*[만천백십]?$/,  // 한국어 단위: 1.2만, 523
-      /^\d+\.?\d*[kmb]$/i,   // 영어 단위: 1.2k, 5m
-      /^\d+$/                // 순수 숫자: 123
+      // 기본 패턴
+      /^\d{1,3}(,\d{3})*명$/,                    // "2,839명"
+      /^\d+\.?\d*[만천백십]명?$/,                // "1.2만명", "523명"  
+      /^\d+\.?\d*[kmb]$/i,                      // "1.2k", "5m"
+      /^\d+$/,                                  // "123"
+      
+      // 복합 패턴 (새로 추가)
+      /^\d{1,3}(,\d{3})*명\s*시청\s*중$/,        // "2,862명 시청 중"
+      /^\d{1,3}(,\d{3})*명이?\s*시청\s*중$/,     // "2,862명이 시청 중"
+      /^\d+\.?\d*[만천백십]명?\s*시청\s*중$/,    // "1.2만명 시청 중"
+      /^\d+\.?\d*[kmb]\s*watching$/i,           // "1.2k watching"
+      
+      // 실시간 업데이트 패턴
+      /^\d{1,3}(,\d{3})*\s*viewers?$/i,         // "2,839 viewers"
+      /^\d+\.?\d*[만천백십]?\s*viewers?$/i,     // "1.2만 viewers"
+      
+      // 추가 한국어 패턴
+      /^\d{1,3}(,\d{3})*명\s*온라인$/,          // "2,839명 온라인"
+      /^\d{1,3}(,\d{3})*명\s*접속\s*중$/        // "2,839명 접속 중"
     ];
 
-    return viewerPatterns.some(pattern => pattern.test(text));
+    const isMatch = viewerPatterns.some(pattern => pattern.test(normalizedText));
+    
+    // 디버깅을 위한 로깅
+    if (isMatch) {
+      window.ChzzkLogger?.debug(`🎯 Viewer pattern matched: "${normalizedText}"`);
+    }
+
+    return isMatch;
   }
 
   /**
@@ -268,20 +471,100 @@ class ViewerCountManager {
   }
 
   /**
-   * 숫자 패턴으로 시청자 수 찾아 숨기기
+   * 고급 텍스트 패턴으로 시청자 수 찾아 숨기기 (3단계용)
+   * @private
+   * @param {Element} container - 검색할 컨테이너
+   */
+  hideByAdvancedTextPattern(container) {
+    window.ChzzkLogger?.debug('🔍 Advanced text pattern scan started...');
+    
+    // 성능을 위해 카드 컨테이너만 우선 검색
+    const cardContainers = [
+      ...container.querySelectorAll('[class*="video_card"]'),
+      ...container.querySelectorAll('[class*="thumbnail"]'),
+      ...container.querySelectorAll('[class*="information"]'),
+      ...container.querySelectorAll('[class*="badge"]')
+    ];
+
+    let advancedHiddenCount = 0;
+
+    cardContainers.forEach(cardContainer => {
+      const textNodes = this.getTextNodes(cardContainer);
+      
+      textNodes.forEach(node => {
+        const text = node.textContent?.trim();
+        if (text && this.isViewerCountPattern(text)) {
+          // 시청자 수 패턴 발견 시 가장 적절한 부모 요소 찾기
+          const targetElement = this.findAppropriateParent(node);
+          if (targetElement && this.shouldHideElement(targetElement)) {
+            this.hideElement(targetElement);
+            advancedHiddenCount++;
+            window.ChzzkLogger?.debug(`🎯 Advanced pattern found: "${text}" in ${targetElement.tagName}.${targetElement.className.slice(0, 30)}`);
+          }
+        }
+      });
+    });
+
+    // 전체 컨테이너 검색 (카드 컨테이너에서 찾지 못한 경우)
+    if (advancedHiddenCount === 0) {
+      window.ChzzkLogger?.debug('🔍 Fallback: Full container text scan...');
+      const allTextNodes = this.getTextNodes(container);
+      
+      allTextNodes.forEach(node => {
+        const text = node.textContent?.trim();
+        if (text && this.isViewerCountPattern(text)) {
+          const targetElement = this.findAppropriateParent(node);
+          if (targetElement && this.shouldHideElement(targetElement)) {
+            this.hideElement(targetElement);
+            advancedHiddenCount++;
+          }
+        }
+      });
+    }
+
+    window.ChzzkLogger?.debug(`🎯 Advanced text scan completed: ${advancedHiddenCount} elements found`);
+  }
+
+  /**
+   * 텍스트 노드의 적절한 부모 요소 찾기
+   * @private
+   * @param {Node} textNode - 텍스트 노드
+   * @returns {Element|null} 숨길 대상 요소
+   */
+  findAppropriateParent(textNode) {
+    let current = textNode.parentElement;
+    
+    // 최대 3단계까지 부모를 올라가면서 적절한 요소 찾기
+    for (let i = 0; i < 3 && current; i++) {
+      // span, strong, em 태그이면서 클래스가 있는 경우 우선
+      if (['SPAN', 'STRONG', 'EM'].includes(current.tagName) && current.className) {
+        return current;
+      }
+      
+      // 카드 관련 요소인 경우
+      if (current.className && (
+        current.className.includes('badge') ||
+        current.className.includes('count') ||
+        current.className.includes('viewer')
+      )) {
+        return current;
+      }
+      
+      current = current.parentElement;
+    }
+    
+    // 적절한 부모를 찾지 못한 경우 직접 부모 반환
+    return textNode.parentElement;
+  }
+
+  /**
+   * 숫자 패턴으로 시청자 수 찾아 숨기기 (레거시 지원)
    * @private
    * @param {Element} container - 검색할 컨테이너
    */
   hideByNumberPattern(container) {
-    const textNodes = this.getTextNodes(container);
-    
-    textNodes.forEach(node => {
-      if (node.parentElement && this.isViewerCountPattern(node.textContent)) {
-        if (this.shouldHideElement(node.parentElement)) {
-          this.hideElement(node.parentElement);
-        }
-      }
-    });
+    // 고급 패턴 검색으로 대체됨 - 레거시 호환성 유지
+    this.hideByAdvancedTextPattern(container);
   }
 
   /**
@@ -310,13 +593,191 @@ class ViewerCountManager {
   }
 
   /**
+   * 고도화된 실시간 모니터링 시작
+   */
+  startAdvancedMonitoring() {
+    if (globalViewerObserver) {
+      globalViewerObserver.disconnect();
+    }
+
+    window.ChzzkLogger?.info('🔧 Starting advanced real-time monitoring...');
+
+    // 고성능 MutationObserver 설정
+    globalViewerObserver = new MutationObserver(this.debounce((mutations) => {
+      this.handleDynamicChanges(mutations);
+    }, 100));
+
+    // 전체 document 감시 (서브트리 포함)
+    globalViewerObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'style'], // 클래스나 스타일 변경 감지
+      characterData: true // 텍스트 변경 감지 (실시간 시청자 수 업데이트)
+    });
+
+    window.ChzzkLogger?.info('✅ Advanced monitoring system activated');
+  }
+
+  /**
+   * 동적 변화 처리
+   * @private
+   * @param {MutationRecord[]} mutations - DOM 변화 기록
+   */
+  handleDynamicChanges(mutations) {
+    if (!this.isEnabled || this.processing) {
+      return;
+    }
+
+    let shouldProcess = false;
+    const relevantNodes = new Set();
+
+    mutations.forEach(mutation => {
+      // 1. 새로 추가된 노드 검사 (카드 뷰, 라이브 페이지 요소)
+      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+        mutation.addedNodes.forEach(node => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            // 카드 컨테이너나 정보 컨테이너 감지
+            if (this.isRelevantContainer(node)) {
+              relevantNodes.add(node);
+              shouldProcess = true;
+              window.ChzzkLogger?.debug(`🆕 New relevant container detected: ${node.className.slice(0, 30)}`);
+            }
+          }
+        });
+      }
+
+      // 2. 텍스트 내용 변경 감지 (실시간 시청자 수 업데이트)
+      if (mutation.type === 'characterData') {
+        const parentElement = mutation.target.parentElement;
+        if (parentElement && this.isPotentialViewerElement(parentElement)) {
+          relevantNodes.add(parentElement);
+          shouldProcess = true;
+          window.ChzzkLogger?.debug(`🔄 Text content changed: "${mutation.target.textContent?.slice(0, 20)}"`);
+        }
+      }
+
+      // 3. 속성 변경 감지 (클래스나 스타일 변경)
+      if (mutation.type === 'attributes' && mutation.target.nodeType === Node.ELEMENT_NODE) {
+        const element = mutation.target;
+        if (this.isPotentialViewerElement(element)) {
+          relevantNodes.add(element);
+          shouldProcess = true;
+        }
+      }
+    });
+
+    // 관련 변화가 있는 경우에만 처리
+    if (shouldProcess) {
+      window.ChzzkLogger?.debug(`🔍 Processing ${relevantNodes.size} relevant nodes...`);
+      
+      // 각 관련 노드에 대해 시청자 수 숨기기 실행
+      relevantNodes.forEach(node => {
+        this.hideAll(node);
+      });
+      
+      // 주기적 메모리 최적화
+      this.optimizeMemory();
+    }
+  }
+
+  /**
+   * 관련 컨테이너인지 확인
+   * @private
+   * @param {Element} element - 검사할 요소
+   * @returns {boolean} 관련 컨테이너 여부
+   */
+  isRelevantContainer(element) {
+    const className = element.className || '';
+    const tagName = element.tagName || '';
+
+    // 카드 뷰 컨테이너
+    if (className.includes('video_card') || 
+        className.includes('thumbnail') || 
+        className.includes('badge')) {
+      return true;
+    }
+
+    // 라이브 페이지 정보 컨테이너
+    if (className.includes('video_information') || 
+        className.includes('live_information') || 
+        className.includes('information_data')) {
+      return true;
+    }
+
+    // 사이드바 컨테이너
+    if (className.includes('navigator') || 
+        className.includes('navigation_bar')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * 잠재적 시청자 수 요소인지 확인
+   * @private
+   * @param {Element} element - 검사할 요소
+   * @returns {boolean} 잠재적 시청자 수 요소 여부
+   */
+  isPotentialViewerElement(element) {
+    const className = element.className || '';
+    const tagName = element.tagName || '';
+    const text = element.textContent?.trim() || '';
+
+    // 태그 기반 확인
+    if (!['SPAN', 'STRONG', 'EM', 'DIV'].includes(tagName)) {
+      return false;
+    }
+
+    // 클래스 기반 확인
+    if (className.includes('count') || 
+        className.includes('viewer') || 
+        className.includes('badge')) {
+      return true;
+    }
+
+    // 텍스트 패턴 기반 확인 (간단한 패턴만)
+    if (/\d+.*명/.test(text) || /\d+.*시청/.test(text)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * 디바운스 유틸리티
+   * @private
+   * @param {Function} func - 실행할 함수
+   * @param {number} wait - 대기 시간 (ms)
+   * @returns {Function} 디바운스된 함수
+   */
+  debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func.apply(this, args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  /**
    * 시청자 수 숨기기 기능 활성화/비활성화
    * @param {boolean} enabled - 활성화 여부
    */
   setEnabled(enabled) {
     this.isEnabled = enabled;
     
-    if (!enabled) {
+    if (enabled) {
+      this.startAdvancedMonitoring();
+    } else {
+      if (globalViewerObserver) {
+        globalViewerObserver.disconnect();
+        globalViewerObserver = null;
+      }
       this.showAll();
     }
     
@@ -324,15 +785,25 @@ class ViewerCountManager {
   }
 
   /**
-   * 정리 함수
+   * 정리 함수 (고도화)
    */
   cleanup() {
+    // 타이머 정리
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
     }
     if (this.masterTimer) {
       clearTimeout(this.masterTimer);
     }
+    
+    // 고도화된 모니터링 시스템 정리
+    if (globalViewerObserver) {
+      globalViewerObserver.disconnect();
+      globalViewerObserver = null;
+    }
+    
+    // 전역 상태 정리
+    processedElements = new WeakSet();
     
     // 모든 시청자 수 복원
     this.showAll();
@@ -342,6 +813,8 @@ class ViewerCountManager {
     if (style) {
       style.remove();
     }
+    
+    window.ChzzkLogger?.info('🧹 Advanced viewer count system cleaned up');
   }
 }
 
