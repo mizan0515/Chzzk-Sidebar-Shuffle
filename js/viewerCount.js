@@ -362,11 +362,14 @@ class ViewerCountManager {
     // 시청자 수 패턴 확인
     const isViewerCount = this.isViewerCountPattern(text);
     
-    // 클래스명으로 시청자 수 판단
-    const hasViewerClass = element.className && (
-      element.className.includes('count') ||
-      element.className.includes('viewer') ||
-      element.className.includes('live_count')
+    // 클래스명으로 시청자 수 판단 (안전한 문자열 처리)
+    const safeClassName = (element.className && typeof element.className === 'string') ? 
+                         element.className : 
+                         (element.className && element.className.baseVal ? element.className.baseVal : '');
+    const hasViewerClass = safeClassName && (
+      safeClassName.includes('count') ||
+      safeClassName.includes('viewer') ||
+      safeClassName.includes('live_count')
     );
 
     // 라이브 정보 창에서는 더 엄격한 조건 적용
@@ -537,15 +540,21 @@ class ViewerCountManager {
     // 최대 3단계까지 부모를 올라가면서 적절한 요소 찾기
     for (let i = 0; i < 3 && current; i++) {
       // span, strong, em 태그이면서 클래스가 있는 경우 우선
-      if (['SPAN', 'STRONG', 'EM'].includes(current.tagName) && current.className) {
+      const hasValidClassName = current.className && 
+                               (typeof current.className === 'string' || 
+                                (current.className.baseVal && typeof current.className.baseVal === 'string'));
+      if (['SPAN', 'STRONG', 'EM'].includes(current.tagName) && hasValidClassName) {
         return current;
       }
       
-      // 카드 관련 요소인 경우
-      if (current.className && (
-        current.className.includes('badge') ||
-        current.className.includes('count') ||
-        current.className.includes('viewer')
+      // 카드 관련 요소인 경우 (안전한 문자열 처리)
+      const safeClassName = (current.className && typeof current.className === 'string') ? 
+                           current.className : 
+                           (current.className && current.className.baseVal ? current.className.baseVal : '');
+      if (safeClassName && (
+        safeClassName.includes('badge') ||
+        safeClassName.includes('count') ||
+        safeClassName.includes('viewer')
       )) {
         return current;
       }
@@ -688,7 +697,10 @@ class ViewerCountManager {
    * @returns {boolean} 관련 컨테이너 여부
    */
   isRelevantContainer(element) {
-    const className = element.className || '';
+    // 안전한 문자열 변환
+    const className = (element.className && typeof element.className === 'string') ? 
+                     element.className : 
+                     (element.className && element.className.baseVal ? element.className.baseVal : '');
     const tagName = element.tagName || '';
 
     // 카드 뷰 컨테이너
@@ -721,7 +733,10 @@ class ViewerCountManager {
    * @returns {boolean} 잠재적 시청자 수 요소 여부
    */
   isPotentialViewerElement(element) {
-    const className = element.className || '';
+    // 안전한 문자열 변환
+    const className = (element.className && typeof element.className === 'string') ? 
+                     element.className : 
+                     (element.className && element.className.baseVal ? element.className.baseVal : '');
     const tagName = element.tagName || '';
     const text = element.textContent?.trim() || '';
 
