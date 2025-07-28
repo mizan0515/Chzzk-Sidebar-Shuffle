@@ -3,7 +3,7 @@
   "name": "Chzzk Sidebar Shuffler",
   "version": "1.2",
   "description": "치지직 팔로잉 스트리머 사이드바를 무작위로 정렬하고 실시간 시청자 수를 가립니다.",
-  "permissions": ["scripting", "activeTab"],
+  "permissions": ["scripting", "activeTab", "storage"],
   "host_permissions": ["*://chzzk.naver.com/*"],
   "action": {
     "default_popup": "popup.html",
@@ -12,7 +12,14 @@
   "content_scripts": [
     {
       "matches": ["*://chzzk.naver.com/*"],
-      "js": ["content.js"],
+      "js": [
+        "js/logger.js",
+        "js/settings.js", 
+        "js/viewerCount.js",
+        "js/moreButton.js",
+        "js/shuffle.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ]

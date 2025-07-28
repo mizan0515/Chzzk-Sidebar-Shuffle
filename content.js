@@ -1,212 +1,526 @@
-// Revised CHZZK SHUFFLE content.js (with auto-expand fix)
-let isShuffling = false;
-let mutationLock = false;
-let observer = null;
-let restoreLock = false;
+/**
+ * 치지직 사이드바 셔플러 - 메인 컨트롤러
+ * 모든 모듈을 통합하고 초기화하는 메인 진입점
+ * @version 1.2
+ */
 
-function injectStyleOnce() {
-  if (document.getElementById('chzzk-style')) return;
-  const style = document.createElement('style');
-  style.id = 'chzzk-style';
-  style.textContent = `.chzzk-hidden { display: none !important; }`;
-  document.head.appendChild(style);
-  console.log('[CHZZK SHUFFLE] Custom CSS injected.');
-}
+(function() {
+  'use strict';
 
-function forceExpandSidebar(callback) {
-  const moreBtn = document.querySelector('.navigator_button__BbAEb');
-  if (moreBtn && moreBtn.textContent.includes('더보기')) {
-    console.log('[CHZZK SHUFFLE] Clicking native more button to load all channels.');
-    moreBtn.click();
-    setTimeout(() => callback(), 800);
-  } else {
-    callback();
+  // 전역 상태 관리
+  let initialized = false;
+  let currentPageType = 'unknown';
+  let observer = null;
+
+  // 페이지 타입 감지 (모든 치지직 페이지 지원)
+  function getCurrentPageType() {
+    const path = window.location.pathname;
+    if (path === '/' || path.startsWith('/home')) return 'main';
+    if (path.startsWith('/following')) return 'following';
+    if (path.startsWith('/live/')) return 'live';
+    
+    // 모든 치지직 페이지에서 LNB 셔플 지원
+    // 카테고리, 검색, 게임 등 모든 페이지
+    return 'universal';
   }
-}
 
-function waitUntilEnoughItems(minCount = 10, callback, attempt = 0) {
-  const list = document.querySelector('.navigator_list__cHnuV');
-  const items = list?.querySelectorAll('.navigator_item__qXlq9') || [];
-  console.log(`[CHZZK SHUFFLE] [Wait Attempt ${attempt}] Items loaded: ${items.length}/${minCount}`);
-  if (items.length >= minCount) {
-    console.log('[CHZZK SHUFFLE] All expected items loaded.');
-    callback(list);
-  } else if (attempt < 20) {
-    forceExpandSidebar(() => {
-      setTimeout(() => waitUntilEnoughItems(minCount, callback, attempt + 1), 400);
-    });
-  } else {
-    console.warn('[CHZZK SHUFFLE] Item loading timeout. Proceeding anyway.');
-    callback(list);
-  }
-}
-
-function shuffleSidebar() {
-  const list = document.querySelector('.navigator_list__cHnuV');
-  if (!list || mutationLock) return;
-  const items = Array.from(list.querySelectorAll('.navigator_item__qXlq9'));
-  const live = [];
-  const offline = [];
-  items.forEach(item => {
-    const viewerCount = item.querySelector('.navigator_count__db5Av');
-    if (viewerCount) {
-      viewerCount.style.setProperty('display', 'none', 'important');
-      live.push(item);
-    } else {
-      offline.push(item);
+  // 안전한 초기화 래퍼
+  function safeInitialize() {
+    if (initialized) {
+      window.ChzzkLogger?.warn('⚠️ Already initialized, skipping duplicate initialization');
+      return;
     }
-  });
-  items.forEach(item => item.remove());
-  shuffleArray(live);
-  shuffleArray(offline);
-  [...live, ...offline].forEach(item => list.appendChild(item));
-  isShuffling = true;
-  ensureMoreButtonAtBottom(list);
-}
 
-function ensureMoreButtonAtBottom(list) {
-  console.log('[CHZZK SHUFFLE] Ensuring more button at bottom...');
-  const footerClass = 'navigator_footer__7EbUV';
-  list.querySelectorAll(`.${footerClass}`).forEach(footer => footer.remove());
-  const moreButtonContainer = document.createElement('div');
-  moreButtonContainer.className = footerClass;
-  const moreButton = document.createElement('button');
-  moreButton.type = 'button';
-  moreButton.className = 'navigator_button_more__UE0v3';
-  moreButton.setAttribute('aria-expanded', 'false');
-  updateMoreButtonText(moreButton, false);
-  moreButton.addEventListener('click', () => {
-    const expanded = moreButton.getAttribute('aria-expanded') === 'true';
-    const newState = !expanded;
-    moreButton.setAttribute('aria-expanded', newState.toString());
-    updateMoreButtonText(moreButton, newState);
-    const items = list.querySelectorAll('.navigator_item__qXlq9');
-    console.log(`[CHZZK SHUFFLE] More button clicked. Items: ${items.length}, Expanding: ${newState}`);
-    items.forEach((item, index) => {
-      if (index >= 6) item.classList.toggle('chzzk-hidden', !newState);
-    });
-  });
-  const items = list.querySelectorAll('.navigator_item__qXlq9');
-  items.forEach((item, index) => {
-    if (index >= 6) item.classList.add('chzzk-hidden');
-  });
-  moreButtonContainer.appendChild(moreButton);
-  list.appendChild(moreButtonContainer);
-  console.log('[CHZZK SHUFFLE] More button inserted.');
-}
+    try {
+      window.ChzzkLogger?.info('🚀 Starting Chzzk Sidebar Shuffler initialization...');
+      
+      // 의존성 확인
+      const requiredModules = ['ChzzkLogger', 'ChzzkSettings', 'ChzzkViewerCount', 'ChzzkMoreButton', 'ChzzkShuffle'];
+      const missingModules = requiredModules.filter(module => !window[module]);
+      
+      if (missingModules.length > 0) {
+        console.error('❌ Missing required modules:', missingModules);
+        return;
+      }
 
-function updateMoreButtonText(button, expanded) {
-  button.innerHTML = expanded
-    ? `접기<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 6.5L8 9.5L11 6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>`
-    : `더보기<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 6.5L8 9.5L11 6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
-}
-
-function shuffleArray(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+      // 설정 로드 및 초기화
+      initializeExtension();
+      
+    } catch (error) {
+      window.ChzzkLogger?.error('💥 Critical error during initialization:', error);
+    }
   }
-}
 
-function injectShuffleButton() {
-  if (document.querySelector('#customShuffleBtn')) return;
-  const target = document.querySelector('.header_service__DyG7M');
-  if (!target) return;
-  const button = document.createElement('button');
-  button.id = 'customShuffleBtn';
-  button.textContent = '채널 셔플';
-  Object.assign(button.style, {
-    margin: '4px', padding: '4px 8px', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer'
-  });
-  button.addEventListener('click', () => {
-    console.log('[CHZZK SHUFFLE] Shuffle button clicked.');
-    waitUntilEnoughItems(10, (list) => {
-      shuffleSidebar();
-    });
-  });
-  target.appendChild(button);
-  console.log('[CHZZK SHUFFLE] Shuffle button injected.');
-}
+  // 확장 프로그램 초기화
+  async function initializeExtension() {
+    try {
+      // 1. 설정 로드
+      await window.ChzzkSettings.load();
+      window.ChzzkLogger?.info('⚙️ Settings loaded successfully');
 
-function observeChanges() {
-  const sidebar = document.querySelector('#navigation');
-  if (!sidebar) return;
-  if (observer) observer.disconnect();
-  observer = new MutationObserver(() => {
-    if (mutationLock || restoreLock) return;
-    mutationLock = true;
-    setTimeout(() => {
-      console.log('[CHZZK SHUFFLE] DOM mutation observed. Reapplying UI.');
-      waitUntilEnoughItems(10, (list) => {
-        shuffleSidebar();
-        injectShuffleButton();
-        mutationLock = false;
+      // 2. 설정 변경 감지 등록
+      window.ChzzkSettings.onChange((changes, allSettings) => {
+        window.ChzzkLogger?.info('🔄 Settings changed:', changes);
+        
+        // 시청자 수 설정 변경 시 즉시 적용
+        if (changes.hideViewerCount !== undefined) {
+          window.ChzzkViewerCount.scheduleUpdate();
+        }
+        
+        // 셔플 설정 변경은 다음 셔플 시 적용
+        if (changes.enableShuffle !== undefined) {
+          window.ChzzkLogger?.info(`🎲 Shuffle setting changed to: ${changes.enableShuffle}`);
+        }
       });
-    }, 500);
-  });
-  observer.observe(sidebar, { childList: true, subtree: true });
-  console.log('[CHZZK SHUFFLE] Mutation observer activated.');
-}
 
-function monitorUrlAndRestore() {
-  let lastUrl = location.href;
-  setInterval(() => {
-    const currentUrl = location.href;
-    if (currentUrl !== lastUrl) {
-      lastUrl = currentUrl;
-      console.log('[CHZZK SHUFFLE] URL changed. Reinitializing...');
-      setTimeout(() => {
-        waitUntilEnoughItems(10, (list) => {
-          shuffleSidebar();
-          injectShuffleButton();
-          observeChanges();
+      // 3. 페이지 타입별 초기화
+      currentPageType = getCurrentPageType();
+      await initializeByPageType(currentPageType);
+
+      // 4. URL 변경 감지 설정
+      setupUrlChangeDetection();
+
+      // 5. 전역 함수 등록
+      registerGlobalFunctions();
+
+      initialized = true;
+      window.ChzzkLogger?.info('✅ Chzzk Sidebar Shuffler initialized successfully');
+
+    } catch (error) {
+      window.ChzzkLogger?.error('❌ Error during extension initialization:', error);
+    }
+  }
+
+  // 페이지 타입별 초기화
+  async function initializeByPageType(pageType) {
+    window.ChzzkLogger?.info(`🚀 Initializing for page type: ${pageType}`);
+    
+    // 모든 페이지에서 즉시 시청자 수 설정 적용
+    window.ChzzkViewerCount.scheduleUpdate();
+
+    switch (pageType) {
+      case 'main':
+        await initializeMainPage();
+        break;
+        
+      case 'following':
+        await initializeFollowingPage();
+        break;
+        
+      case 'live':
+        await initializeLivePage();
+        break;
+        
+      case 'universal':
+        await initializeUniversalPage();
+        break;
+        
+      default:
+        window.ChzzkLogger?.info('ℹ️ Unknown page type, applying basic functionality only');
+        // 기본 기능만 적용 (시청자 수 숨기기)
+        window.ChzzkViewerCount.scheduleUpdate();
+        break;
+    }
+  }
+
+  // 메인 페이지 초기화
+  async function initializeMainPage() {
+    window.ChzzkLogger?.info('🏠 Initializing main page features');
+    
+    // 동적 로딩 감지 후 셔플 실행
+    window.ChzzkShuffle.waitForDynamicLoading((list, items, reason) => {
+      window.ChzzkLogger?.info(`🎯 Main page dynamic loading completed: ${items?.length || 0} channels (reason: ${reason})`);
+      
+      if (items && items.length > 0) {
+        window.ChzzkLogger?.info(`✅ Main page: Found ${items.length} channels, executing shuffle`);
+        window.ChzzkShuffle.executeShuffle(list, items);
+        setupChangeObserver();
+      } else {
+        window.ChzzkLogger?.warn('⚠️ Main page: No channels found after dynamic loading');
+      }
+    });
+  }
+
+  // 팔로잉 페이지 초기화 (점진적 셔플 지원)
+  async function initializeFollowingPage() {
+    window.ChzzkLogger?.info('👥 Initializing following page features (progressive shuffle)');
+    
+    // 점진적 셔플: 초기 로드된 채널만 먼저 셔플
+    window.ChzzkShuffle.waitForDynamicLoading((list, items, reason) => {
+      window.ChzzkLogger?.info(`🎯 Following page initial loading completed: ${items?.length || 0} channels (reason: ${reason})`);
+      
+      if (items && items.length > 0) {
+        window.ChzzkLogger?.info(`✅ Following page: Found ${items.length} initial channels, executing initial shuffle`);
+        
+        // 1. 초기 채널들만 셔플 (더보기 클릭 전 상태)
+        window.ChzzkShuffle.executeShuffle(list, items);
+        
+        // 2. 더보기 버튼 점진적 로딩 지원 설정
+        setupProgressiveLoadingSupport(list);
+        
+        // 3. DOM 변경 감지 설정
+        setupChangeObserver();
+        
+        window.ChzzkLogger?.info('🔧 Following page: 점진적 셔플 시스템 준비 완료');
+      } else {
+        window.ChzzkLogger?.warn('⚠️ Following page: No initial channels found');
+      }
+    }, 8000); // 초기 로딩은 8초만 대기 (점진적이므로 더 짧게)
+  }
+
+  // 라이브 페이지 초기화
+  async function initializeLivePage() {
+    window.ChzzkLogger?.info('📺 Initializing live page features');
+    
+    // 라이브 페이지에서도 사이드바 셔플 지원
+    window.ChzzkShuffle.waitForDynamicLoading((list, items, reason) => {
+      window.ChzzkLogger?.info(`🎯 Live page dynamic loading completed: ${items?.length || 0} channels (reason: ${reason})`);
+      
+      if (items && items.length > 0) {
+        window.ChzzkLogger?.info(`✅ Live page: Found ${items.length} channels, executing shuffle`);
+        window.ChzzkShuffle.executeShuffle(list, items);
+        setupChangeObserver();
+      } else {
+        window.ChzzkLogger?.warn('⚠️ Live page: No channels found after dynamic loading');
+      }
+    }, 10000);
+
+    // 라이브 페이지 전용 시청자 수 모니터링 강화
+    setupLivePageMonitoring();
+  }
+
+  // 라이브 페이지 전용 모니터링 (강화된 버전)
+  function setupLivePageMonitoring() {
+    window.ChzzkLogger?.info('🔧 Setting up enhanced live page monitoring');
+    
+    // 라이브 페이지는 실시간 업데이트가 빈번하므로 더 적극적인 모니터링
+    const liveMonitorInterval = setInterval(() => {
+      if (window.ChzzkSettings?.get('hideViewerCount')) {
+        // 라이브 페이지 메인 시청자 수 (강화된 셀렉터)
+        const mainViewerSelectors = [
+          // 기본 셀렉터
+          '.live_information_player__lYPjg [class*="video_information_count"]',
+          '.live_information_player__lYPjg strong',
+          '.video_information_count__VdSfG',
+          
+          // 추가 강화 셀렉터
+          '.live_information_player__lYPjg [class*="count"]',
+          '[class*="live_information"] [class*="count"]',
+          '[class*="video_information"] strong',
+          '.live_information_text__TyGBp strong',
+          '.video_information_text__+uTx5 strong',
+          
+          // 더 넓은 범위
+          '.live_information_player__lYPjg span:not([class*="title"]):not([class*="name"])',
+          '.live_information_player__lYPjg em:not([class*="title"]):not([class*="name"])'
+        ];
+
+        let hiddenCount = 0;
+        mainViewerSelectors.forEach(selector => {
+          try {
+            const elements = document.querySelectorAll(selector);
+            elements.forEach(el => {
+              // 시청자 수 패턴 확인
+              const text = el.textContent?.trim() || '';
+              const isViewerCount = /^\d{1,3}(,\d{3})*$|^\d+\.?\d*[만천백십kmb]?$/i.test(text);
+              
+              if (isViewerCount && !el.classList.contains('chzzk-viewer-hidden')) {
+                // 제목이나 스트리머 이름이 아닌지 확인
+                const isNotTitle = !el.closest('[class*="title"]') && 
+                                 !el.closest('[class*="name"]') &&
+                                 !text.includes('LIVE') && 
+                                 !text.includes('라이브');
+                
+                if (isNotTitle) {
+                  window.ChzzkViewerCount.hideElement(el);
+                  hiddenCount++;
+                  window.ChzzkLogger?.debug(`🎯 [LIVE] Hidden viewer count: "${text}" (${selector})`);
+                }
+              }
+            });
+          } catch (error) {
+            window.ChzzkLogger?.warn(`❌ Error with live selector ${selector}:`, error);
+          }
         });
-      }, 500);
-    }
-  }, 1000);
-}
 
-function monitorAndRestore() {
-  setInterval(() => {
-    if (restoreLock) return;
-    const sidebar = document.querySelector('#navigation');
-    const list = document.querySelector('.navigator_list__cHnuV');
-    const shuffleBtn = document.querySelector('#customShuffleBtn');
-    const footer = document.querySelector('.navigator_footer__7EbUV');
-    if (sidebar && list && (!shuffleBtn || !footer)) {
-      restoreLock = true;
-      console.log('[CHZZK SHUFFLE] DOM reset detected. Restoring...');
-      waitUntilEnoughItems(10, (list) => {
-        shuffleSidebar();
-        injectShuffleButton();
-        restoreLock = false;
+        if (hiddenCount > 0) {
+          window.ChzzkLogger?.debug(`🎯 [LIVE] Total hidden ${hiddenCount} main viewer count elements`);
+        }
+      }
+    }, 300); // 0.3초마다 모니터링 (더 빈번하게)
+
+    // 페이지 이동 시 정리
+    const cleanup = () => {
+      clearInterval(liveMonitorInterval);
+    };
+
+    // URL 변경 시 정리
+    window.addEventListener('beforeunload', cleanup);
+    
+    // Pushstate/popstate 이벤트에서도 정리
+    const originalPushState = history.pushState;
+    history.pushState = function(...args) {
+      cleanup();
+      return originalPushState.apply(this, args);
+    };
+  }
+
+  // URL 변경 감지 설정
+  function setupUrlChangeDetection() {
+    let lastUrl = window.location.href;
+    let lastPageType = currentPageType;
+
+    const checkUrlChange = () => {
+      const currentUrl = window.location.href;
+      const newPageType = getCurrentPageType();
+
+      if (currentUrl !== lastUrl || newPageType !== lastPageType) {
+        window.ChzzkLogger?.info(`🔄 URL changed: ${lastPageType} → ${newPageType}`);
+        
+        // 이전 페이지 상태 정리
+        cleanupPreviousPage();
+        
+        // 새 페이지 초기화
+        currentPageType = newPageType;
+        lastPageType = newPageType;
+        lastUrl = currentUrl;
+        
+        // 약간의 지연 후 새 페이지 초기화
+        setTimeout(() => {
+          initializeByPageType(newPageType);
+        }, 500);
+      }
+    };
+
+    // Pushstate와 popstate 이벤트 감지
+    const originalPushState = history.pushState;
+    history.pushState = function(...args) {
+      const result = originalPushState.apply(this, args);
+      setTimeout(checkUrlChange, 100);
+      return result;
+    };
+
+    window.addEventListener('popstate', () => {
+      setTimeout(checkUrlChange, 100);
+    });
+
+    // 주기적 URL 체크 (백업)
+    setInterval(checkUrlChange, 2000);
+  }
+
+  // 이전 페이지 정리
+  function cleanupPreviousPage() {
+    // 셔플 상태 초기화
+    if (window.ChzzkShuffle) {
+      window.ChzzkShuffle.reset();
+    }
+
+    // 더보기 버튼 상태 초기화
+    if (window.ChzzkMoreButton) {
+      window.ChzzkMoreButton.reset();
+    }
+
+    // 옵저버 정리
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+
+    window.ChzzkLogger?.debug('🧹 Previous page cleaned up');
+  }
+
+  // DOM 변경 감지 설정
+  function setupChangeObserver() {
+    if (observer) {
+      observer.disconnect();
+    }
+
+    let updateTimeout = null; // 지역 변수로 변경
+
+    observer = new MutationObserver((mutations) => {
+      let shouldUpdate = false;
+
+      mutations.forEach((mutation) => {
+        // 새로운 채널이 추가되었는지 확인
+        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+          for (const node of mutation.addedNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              // 채널 관련 요소가 추가되었는지 확인
+              const hasChannelContent = node.querySelector && (
+                node.querySelector('a[href*="/live/"]') ||
+                node.querySelector('a[href*="/channel/"]') ||
+                node.matches && (
+                  node.matches('.navigator_item__mH4JG') ||
+                  node.matches('.navigator_item__qXlq9')
+                )
+              );
+
+              if (hasChannelContent) {
+                shouldUpdate = true;
+                break;
+              }
+            }
+          }
+        }
       });
+
+      // 디바운스된 업데이트
+      if (shouldUpdate) {
+        clearTimeout(updateTimeout);
+        updateTimeout = setTimeout(() => {
+          window.ChzzkViewerCount.scheduleUpdate();
+        }, 200);
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    window.ChzzkLogger?.debug('👁️ DOM change observer set up');
+  }
+
+  // 범용 페이지 초기화 (모든 치지직 페이지)
+  async function initializeUniversalPage() {
+    window.ChzzkLogger?.info('🌐 Initializing universal page features (all chzzk pages)');
+    
+    // 모든 페이지에서 LNB 셔플 지원
+    window.ChzzkShuffle.waitForDynamicLoading((list, items, reason) => {
+      window.ChzzkLogger?.info(`🎯 Universal page dynamic loading completed: ${items?.length || 0} channels (reason: ${reason})`);
+      
+      if (items && items.length > 0) {
+        window.ChzzkLogger?.info(`✅ Universal page: Found ${items.length} channels, executing shuffle`);
+        
+        // LNB 채널 셔플 실행
+        window.ChzzkShuffle.executeShuffle(list, items);
+        
+        // 점진적 로딩 지원 설정
+        setupProgressiveLoadingSupport(list);
+        
+        // DOM 변경 감지 설정
+        setupChangeObserver();
+        
+        window.ChzzkLogger?.info('🔧 Universal page: LNB 셔플 시스템 준비 완료');
+      } else {
+        window.ChzzkLogger?.info('ℹ️ Universal page: No channels found, applying viewer count settings only');
+      }
+    }, 6000); // 범용 페이지는 6초 대기
+  }
+
+  // 점진적 로딩 지원 설정
+  function setupProgressiveLoadingSupport(list) {
+    window.ChzzkLogger?.info('🔧 Setting up progressive loading support...');
+    
+    // 더보기 버튼을 찾아서 점진적 셔플 지원 설정
+    const moreButton = document.querySelector('.navigation_bar_more_button__7DoyA');
+    if (moreButton) {
+      window.ChzzkLogger?.info('✅ Found more button, setting up progressive shuffle support');
+      window.ChzzkMoreButton.enhanceOriginal(moreButton, list);
+    } else {
+      window.ChzzkLogger?.info('ℹ️ No more button found initially, will monitor for it');
+      
+      // 더보기 버튼이 나중에 나타날 수 있으므로 모니터링
+      const buttonObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.type === 'childList') {
+            const addedButton = document.querySelector('.navigation_bar_more_button__7DoyA');
+            if (addedButton && !addedButton.hasAttribute('data-shuffle-enhanced')) {
+              window.ChzzkLogger?.info('🎯 More button appeared, setting up progressive shuffle support');
+              window.ChzzkMoreButton.enhanceOriginal(addedButton, list);
+              buttonObserver.disconnect();
+            }
+          }
+        });
+      });
+      
+      buttonObserver.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+      
+      // 5초 후 옵저버 정리 (메모리 누수 방지)
+      setTimeout(() => {
+        buttonObserver.disconnect();
+      }, 5000);
     }
-  }, 1000);
-}
+  }
 
-function reinitializeOnLayoutChange() {
-  const handler = () => {
-    console.log('[CHZZK SHUFFLE] Layout change detected.');
-    waitUntilEnoughItems(10, (list) => {
-      shuffleSidebar();
-      injectShuffleButton();
-    });
-  };
-  window.addEventListener('resize', handler);
-  document.addEventListener('fullscreenchange', handler);
-}
+  // 전역 함수 등록 (팝업에서 사용)
+  function registerGlobalFunctions() {
+    // 팝업에서 호출할 수 있는 메인 셔플 함수
+    window.shuffleSidebar = () => {
+      window.ChzzkLogger?.shuffle('🎯 Global shuffleSidebar function called from popup');
+      
+      if (!window.ChzzkSettings?.get('enableShuffle')) {
+        window.ChzzkLogger?.info('🚫 Shuffle disabled by user setting in global function');
+        return;
+      }
+      
+      // 충분한 아이템이 로드될 때까지 대기 후 셔플 실행
+      waitUntilEnoughItems(8, (list, items) => {
+        window.ChzzkLogger?.shuffle('🎯 Global shuffleSidebar callback executed');
+        if (list && items) {
+          window.ChzzkShuffle.executeShuffle(list, items, true); // 강제 셔플로 실행
+        }
+      });
+    };
 
-window.addEventListener('load', () => {
-  setTimeout(() => {
-    injectStyleOnce();
-    waitUntilEnoughItems(10, (list) => {
-      shuffleSidebar();
-      injectShuffleButton();
-      observeChanges();
-    });
-    reinitializeOnLayoutChange();
-    monitorAndRestore();
-    monitorUrlAndRestore();
-  }, 500);
-});
+    window.ChzzkLogger?.info('🔧 Global functions registered');
+  }
+
+  // 충분한 아이템이 로드될 때까지 대기
+  function waitUntilEnoughItems(minCount, callback, attempt = 0, maxAttempts = 8) {
+    const callbackId = `callback_${Date.now()}_${Math.random()}`;
+    
+    if (window.ChzzkShuffle.activeCallbacks?.has(callbackId)) {
+      window.ChzzkLogger?.warn(`⚠️ Duplicate callback detected: ${callbackId}, skipping`);
+      return;
+    }
+    
+    if (window.ChzzkShuffle.activeCallbacks) {
+      window.ChzzkShuffle.activeCallbacks.add(callbackId);
+    }
+
+    try {
+      const { list, items } = window.ChzzkShuffle.findChannelsList();
+      const allChannelItems = window.ChzzkShuffle.findChannelItems(list || document);
+      const totalItems = Math.max(items.length, allChannelItems.length);
+
+      window.ChzzkLogger?.debug(`📊 Item check [Attempt ${attempt + 1}]: ${totalItems}/${minCount} items`);
+
+      if (totalItems >= minCount || attempt >= maxAttempts) {
+        // 콜백 실행
+        if (typeof callback === 'function') {
+          try {
+            callback(list, allChannelItems);
+          } catch (callbackError) {
+            window.ChzzkLogger?.error(`❌ Error in callback execution [ID: ${callbackId}]:`, callbackError);
+          } finally {
+            if (window.ChzzkShuffle.activeCallbacks) {
+              window.ChzzkShuffle.activeCallbacks.delete(callbackId);
+            }
+          }
+        }
+      } else {
+        // 재시도
+        setTimeout(() => {
+          waitUntilEnoughItems(minCount, callback, attempt + 1, maxAttempts);
+        }, 1000);
+      }
+    } catch (error) {
+      window.ChzzkLogger?.error(`💥 Error in waitUntilEnoughItems [Attempt ${attempt + 1}]:`, error);
+      if (window.ChzzkShuffle.activeCallbacks) {
+        window.ChzzkShuffle.activeCallbacks.delete(callbackId);
+      }
+    }
+  }
+
+  // 초기화 실행
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', safeInitialize);
+  } else {
+    safeInitialize();
+  }
+
+})();

@@ -1,0 +1,423 @@
+/**
+ * 더보기 버튼 관리 모듈
+ * 치지직 사이드바의 더보기 버튼을 관리하고 모든 채널을 로드하는 기능
+ */
+
+// 더보기 버튼 상태 관리
+let moreButtonCreated = false;
+
+/**
+ * 더보기 버튼 관리 클래스
+ */
+class MoreButtonManager {
+  constructor() {
+    this.created = false;
+    this.expandCallbacks = new Set();
+  }
+
+  /**
+   * 사이드바를 강제로 확장하여 모든 채널 로드
+   * @param {Function} callback - 확장 완료 후 호출될 콜백
+   */
+  forceExpand(callback) {
+    const startTime = Date.now();
+    
+    try {
+      window.ChzzkLogger?.info('🔧 Attempting to expand sidebar...');
+      
+      // 더보기 버튼을 찾는 여러 방법 (우선순위 순서로 개선)
+      const expandButtonSelectors = [
+        '.navigation_bar_more_button__7DoyA', // 가장 구체적인 클래스
+        'button[aria-expanded="false"]',
+        'button[aria-label*="더보기"]',
+        'button[aria-label*="펼쳐짐"]',
+        '.navigator_button_more__UE0v3',
+        'button[class*="navigator_button"]',
+        'button[class*="more"]',
+        '.aside_content__j2eTE button',
+        'nav[class*="navigation_bar"] button'
+      ];
+      
+      let moreBtn = null;
+      let foundSelector = '';
+      
+      // 여러 셀렉터로 순차 검색
+      for (const selector of expandButtonSelectors) {
+        try {
+          moreBtn = document.querySelector(selector);
+          if (moreBtn) {
+            foundSelector = selector;
+            window.ChzzkLogger?.info(`✓ Found expand button with selector: ${selector}`);
+            window.ChzzkLogger?.debug('Button details:', {
+              tagName: moreBtn.tagName,
+              className: moreBtn.className,
+              textContent: moreBtn.textContent?.trim(),
+              ariaExpanded: moreBtn.getAttribute('aria-expanded'),
+              ariaLabel: moreBtn.getAttribute('aria-label')
+            });
+            break;
+          }
+        } catch (error) {
+          window.ChzzkLogger?.warn(`❌ Error with expand button selector ${selector}:`, error);
+        }
+      }
+      
+      // 텍스트 기반으로 찾기 (fallback)
+      if (!moreBtn) {
+        moreBtn = this.findButtonByText();
+        if (moreBtn) {
+          foundSelector = 'text-based';
+        }
+      }
+      
+      // aria-expanded 속성으로 찾기 (최종 fallback)
+      if (!moreBtn) {
+        moreBtn = this.findButtonByAria();
+        if (moreBtn) {
+          foundSelector = 'aria-expanded';
+        }
+      }
+      
+      // 버튼 클릭 시도
+      if (moreBtn) {
+        this.clickExpandButton(moreBtn, foundSelector, callback);
+      } else {
+        window.ChzzkLogger?.warn('⚠️ No expand button found - this might cause incomplete channel loading');
+        callback();
+      }
+      
+    } catch (error) {
+      window.ChzzkLogger?.error('💥 Error in forceExpand:', error);
+      callback();
+    }
+    
+    const duration = Date.now() - startTime;
+    window.ChzzkLogger?.debug(`forceExpand completed in ${duration}ms`);
+  }
+
+  /**
+   * 텍스트로 더보기 버튼 찾기
+   * @private
+   * @returns {Element|null} 찾은 버튼 요소
+   */
+  findButtonByText() {
+    window.ChzzkLogger?.info('🔍 Searching for expand button by text content...');
+    const buttons = document.querySelectorAll('button');
+    const moreBtn = Array.from(buttons).find(btn => {
+      const text = btn.textContent?.trim();
+      return text && (text.includes('더보기') || text.includes('펼치기') || text.includes('expand') || text.includes('Show more'));
+    });
+    
+    if (moreBtn) {
+      window.ChzzkLogger?.info('✓ Found expand button by text content:', moreBtn.textContent?.trim());
+    }
+    
+    return moreBtn;
+  }
+
+  /**
+   * aria-expanded 속성으로 더보기 버튼 찾기
+   * @private
+   * @returns {Element|null} 찾은 버튼 요소
+   */
+  findButtonByAria() {
+    window.ChzzkLogger?.info('🔍 Searching for expand button by aria-expanded=false...');
+    const ariaButtons = document.querySelectorAll('button[aria-expanded]');
+    const moreBtn = Array.from(ariaButtons).find(btn => 
+      btn.getAttribute('aria-expanded') === 'false'
+    );
+    
+    if (moreBtn) {
+      window.ChzzkLogger?.info('✓ Found expand button by aria-expanded=false');
+    }
+    
+    return moreBtn;
+  }
+
+  /**
+   * 더보기 버튼 클릭 처리
+   * @private
+   * @param {Element} button - 클릭할 버튼
+   * @param {string} foundSelector - 버튼을 찾은 방법
+   * @param {Function} callback - 완료 콜백
+   */
+  clickExpandButton(button, foundSelector, callback) {
+    const isCollapsed = button.getAttribute('aria-expanded') === 'false' ||
+                       button.textContent?.includes('더보기') ||
+                       button.textContent?.includes('펼치기') ||
+                       button.textContent?.includes('Show more');
+    
+    if (isCollapsed) {
+      window.ChzzkLogger?.info(`🖱️ Clicking expand button to load all channels... (found via: ${foundSelector})`);
+      
+      // 클릭 전 상태 확인
+      const beforeClick = {
+        ariaExpanded: button.getAttribute('aria-expanded'),
+        textContent: button.textContent?.trim()
+      };
+      
+      button.click();
+      
+      // 클릭 후 확인을 위해 약간의 지연
+      setTimeout(() => {
+        const afterClick = {
+          ariaExpanded: button.getAttribute('aria-expanded'),
+          textContent: button.textContent?.trim()
+        };
+        
+        window.ChzzkLogger?.info('📊 Button click result:', {
+          before: beforeClick,
+          after: afterClick,
+          clickSuccessful: beforeClick.ariaExpanded !== afterClick.ariaExpanded
+        });
+        
+        // 추가 로딩 시간을 위해 더 긴 지연
+        callback();
+      }, 200);
+      
+      return;
+    } else {
+      window.ChzzkLogger?.info('✅ Sidebar already expanded');
+    }
+    
+    // 버튼이 없거나 이미 확장된 경우 즉시 콜백 실행
+    callback();
+  }
+
+  /**
+   * 더보기 버튼을 맨 아래에 생성 (필요한 경우)
+   * @param {Element} list - 버튼을 추가할 리스트 요소
+   */
+  ensureAtBottom(list) {
+    // 중복 생성 방지
+    if (this.created) {
+      window.ChzzkLogger?.debug('🔄 More button already created, skipping...');
+      return;
+    }
+    
+    // 원래 더보기 버튼이 있는지 확인
+    const originalMoreButton = document.querySelector('.navigation_bar_more_button__7DoyA');
+    if (originalMoreButton) {
+      window.ChzzkLogger?.info('👍 원래 더보기 버튼을 사용합니다. 새로 생성하지 않습니다.');
+      this.enhanceOriginal(originalMoreButton, list);
+      this.created = true;
+      return;
+    }
+    
+    // 원래 버튼이 없을 때만 새로 생성
+    window.ChzzkLogger?.info('🔧 원래 더보기 버튼이 없어서 새로 생성합니다...');
+    
+    try {
+      this.createNewButton(list);
+      this.created = true;
+      window.ChzzkLogger?.info('✅ More button successfully created');
+    } catch (error) {
+      window.ChzzkLogger?.error('❌ Error creating more button:', error);
+    }
+  }
+
+  /**
+   * 새로운 더보기 버튼 생성
+   * @private
+   * @param {Element} list - 버튼을 추가할 리스트 요소
+   */
+  createNewButton(list) {
+    // 기존 footer 제거
+    const existingFooters = list.querySelectorAll('[data-shuffle-created="true"]');
+    if (existingFooters.length > 0) {
+      window.ChzzkLogger?.debug(`🗑️ Removing ${existingFooters.length} existing footer(s)`);
+      existingFooters.forEach(footer => footer.remove());
+    }
+    
+    const moreButtonContainer = document.createElement('div');
+    moreButtonContainer.className = 'navigation_bar_footer__Xd1Uj';
+    moreButtonContainer.setAttribute('data-shuffle-created', 'true');
+    
+    const moreButton = document.createElement('button');
+    moreButton.type = 'button';
+    moreButton.className = 'navigator_button_more__UE0v3';
+    moreButton.setAttribute('aria-expanded', 'false');
+    moreButton.setAttribute('data-shuffle-button', 'true');
+    
+    this.updateButtonText(moreButton, false);
+    
+    moreButton.addEventListener('click', () => {
+      const expanded = moreButton.getAttribute('aria-expanded') === 'true';
+      const newState = !expanded;
+      moreButton.setAttribute('aria-expanded', newState.toString());
+      this.updateButtonText(moreButton, newState);
+      
+      this.toggleItems(list, newState);
+      
+      window.ChzzkLogger?.debug(`🖱️ More button clicked: expanding: ${newState}`);
+    });
+    
+    moreButtonContainer.appendChild(moreButton);
+    list.appendChild(moreButtonContainer);
+  }
+
+  /**
+   * 원래 더보기 버튼 개선 (점진적 셔플 지원)
+   * @param {Element} originalButton - 원래 더보기 버튼
+   * @param {Element} list - 채널 리스트 요소
+   */
+  enhanceOriginal(originalButton, list) {
+    window.ChzzkLogger?.info('🔧 더보기 버튼 점진적 로딩 지원으로 개선 중...');
+    
+    // 이미 처리되었는지 확인
+    if (originalButton.hasAttribute('data-shuffle-enhanced')) {
+      window.ChzzkLogger?.debug('🔄 버튼이 이미 처리되었습니다.');
+      return;
+    }
+    
+    originalButton.setAttribute('data-shuffle-enhanced', 'true');
+    
+    // 클릭 전 채널 수 저장을 위한 변수
+    let previousChannelCount = 0;
+    
+    // 원래 버튼 클릭 이벤트에 점진적 셔플 추가
+    originalButton.addEventListener('click', () => {
+      // 클릭 전 채널 수 확인
+      const beforeItems = list.querySelectorAll('.navigator_item__mH4JG, .navigator_item__qXlq9, a[href*="/live/"], a[href*="/channel/"]');
+      previousChannelCount = beforeItems.length;
+      
+      window.ChzzkLogger?.info(`🖱️ 더보기 버튼 클릭 - 현재 채널 수: ${previousChannelCount}`);
+      
+      // 원래 동작 완료 후 점진적 셔플 실행
+      setTimeout(() => {
+        const afterItems = list.querySelectorAll('.navigator_item__mH4JG, .navigator_item__qXlq9, a[href*="/live/"], a[href*="/channel/"]');
+        const newChannelCount = afterItems.length;
+        
+        window.ChzzkLogger?.info(`📊 더보기 클릭 후 채널 수: ${previousChannelCount} → ${newChannelCount}`);
+        
+        // 새 채널이 추가된 경우 점진적 셔플 실행
+        if (newChannelCount > previousChannelCount) {
+          const newChannels = Array.from(afterItems).slice(previousChannelCount);
+          window.ChzzkLogger?.info(`🔄 ${newChannels.length}개 새 채널 발견, 점진적 셔플 실행`);
+          
+          if (window.ChzzkShuffle && window.ChzzkShuffle.progressiveShuffle) {
+            window.ChzzkShuffle.progressiveShuffle(list, newChannels);
+          }
+        }
+        
+        // 시청자 수 숨기기 적용
+        if (window.ChzzkViewerCount) {
+          window.ChzzkViewerCount.hideAll(list);
+        }
+        
+        window.ChzzkLogger?.debug('🙈 더보기 버튼 클릭 후 시청자 수 숨기기 완료');
+      }, 300); // 더 긴 지연으로 DOM 업데이트 대기
+    });
+    
+    window.ChzzkLogger?.info('✅ 더보기 버튼 점진적 로딩 지원 설정 완료');
+  }
+
+  /**
+   * 버튼 텍스트 업데이트
+   * @private
+   * @param {Element} button - 업데이트할 버튼
+   * @param {boolean} expanded - 확장 상태
+   */
+  updateButtonText(button, expanded) {
+    button.innerHTML = expanded
+      ? `접기<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 6.5L8 9.5L11 6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>`
+      : `더보기<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 6.5L8 9.5L11 6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+  }
+
+  /**
+   * 아이템들의 표시/숨김 토글
+   * @private
+   * @param {Element} list - 채널 리스트 요소
+   * @param {boolean} expanded - 확장 상태
+   */
+  toggleItems(list, expanded) {
+    const items = list.querySelectorAll('.navigator_item__mH4JG, .navigator_item__qXlq9, a[href*="/live/"], a[href*="/channel/"]');
+    
+    items.forEach((item, index) => {
+      if (expanded) {
+        item.style.removeProperty('display');
+      } else {
+        if (index >= 6) {
+          item.style.display = 'none';
+        }
+      }
+    });
+    
+    // 시청자 수 숨기기 적용
+    if (window.ChzzkViewerCount) {
+      setTimeout(() => {
+        window.ChzzkViewerCount.hideAll(list);
+      }, 50);
+    }
+  }
+
+  /**
+   * 더보기 버튼 생성 상태 초기화
+   */
+  reset() {
+    this.created = false;
+    window.ChzzkLogger?.debug('🔄 More button creation state reset');
+  }
+
+  /**
+   * 정리 함수
+   */
+  cleanup() {
+    // 생성된 버튼들 제거
+    const createdButtons = document.querySelectorAll('[data-shuffle-created="true"]');
+    createdButtons.forEach(button => button.remove());
+    
+    // 개선된 버튼들의 속성 제거
+    const enhancedButtons = document.querySelectorAll('[data-shuffle-enhanced="true"]');
+    enhancedButtons.forEach(button => {
+      button.removeAttribute('data-shuffle-enhanced');
+    });
+    
+    this.reset();
+    window.ChzzkLogger?.info('🧹 More button manager cleaned up');
+  }
+}
+
+// 싱글톤 인스턴스 생성
+const moreButtonManager = new MoreButtonManager();
+
+// 레거시 호환성을 위한 전역 함수들
+function forceExpandSidebar(callback) {
+  moreButtonManager.forceExpand(callback);
+}
+
+function ensureMoreButtonAtBottom(list) {
+  moreButtonManager.ensureAtBottom(list);
+}
+
+function enhanceOriginalMoreButton(originalButton, list) {
+  moreButtonManager.enhanceOriginal(originalButton, list);
+}
+
+function updateMoreButtonText(button, expanded) {
+  moreButtonManager.updateButtonText(button, expanded);
+}
+
+// 전역 접근을 위한 window 객체에 등록
+if (typeof window !== 'undefined') {
+  window.ChzzkMoreButton = moreButtonManager;
+  
+  // 레거시 호환성
+  window.forceExpandSidebar = forceExpandSidebar;
+  window.ensureMoreButtonAtBottom = ensureMoreButtonAtBottom;
+  window.enhanceOriginalMoreButton = enhanceOriginalMoreButton;
+  window.updateMoreButtonText = updateMoreButtonText;
+  window.moreButtonCreated = false; // 레거시 전역 변수
+}
+
+// 모듈 export (Node.js 환경 대응)
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    MoreButtonManager,
+    moreButtonManager,
+    forceExpandSidebar,
+    ensureMoreButtonAtBottom,
+    enhanceOriginalMoreButton,
+    updateMoreButtonText
+  };
+}

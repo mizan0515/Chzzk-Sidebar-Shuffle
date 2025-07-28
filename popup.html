@@ -2,14 +2,197 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>Chzzk 셔플</title>
+  <title>Chzzk Sidebar Shuffler</title>
   <style>
-    body { font-family: sans-serif; padding: 10px; width: 150px; }
-    button { width: 100%; padding: 8px; background: #222; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      width: 320px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #333;
+    }
+    
+    .container {
+      padding: 20px;
+      background: white;
+      border-radius: 12px;
+      margin: 0;
+      min-height: 100%;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    
+    .title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #2d3748;
+      margin-bottom: 4px;
+    }
+    
+    .subtitle {
+      font-size: 12px;
+      color: #718096;
+    }
+    
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    
+    .toggle-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: #f7fafc;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      transition: all 0.2s ease;
+    }
+    
+    .toggle-item:hover {
+      background: #edf2f7;
+      border-color: #cbd5e0;
+    }
+    
+    .toggle-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: #4a5568;
+    }
+    
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: #cbd5e0;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    
+    .toggle-switch.active {
+      background: #48bb78;
+    }
+    
+    .toggle-slider {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 10px;
+      transition: transform 0.2s ease;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .toggle-switch.active .toggle-slider {
+      transform: translateX(20px);
+    }
+    
+    .action-button {
+      width: 100%;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-bottom: 12px;
+    }
+    
+    .action-button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    
+    .action-button:active {
+      transform: translateY(0);
+    }
+    
+    .support-button {
+      width: 100%;
+      padding: 10px 16px;
+      background: #ffd700;
+      color: #2d3748;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      display: inline-block;
+      text-align: center;
+    }
+    
+    .support-button:hover {
+      background: #ffed4e;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(255, 215, 0, 0.4);
+    }
+    
+    .footer {
+      text-align: center;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #e2e8f0;
+    }
+    
+    .version {
+      font-size: 11px;
+      color: #a0aec0;
+    }
   </style>
 </head>
 <body>
-  <button id="shuffleBtn">채널 셔플</button>
+  <div class="container">
+    <div class="header">
+      <div class="title">Chzzk Sidebar Shuffler</div>
+      <div class="subtitle">치지직 사이드바 관리</div>
+    </div>
+    
+    <div class="controls">
+      <div class="toggle-item">
+        <span class="toggle-label">시청자 수 숨기기</span>
+        <div class="toggle-switch" id="hideViewerToggle">
+          <div class="toggle-slider"></div>
+        </div>
+      </div>
+      
+      <div class="toggle-item">
+        <span class="toggle-label">자동 셔플 기능</span>
+        <div class="toggle-switch" id="enableShuffleToggle">
+          <div class="toggle-slider"></div>
+        </div>
+      </div>
+    </div>
+    
+    <button class="action-button" id="shuffleBtn">🎲 채널 셔플 실행</button>
+    
+    <a href="https://aq.gy/f/Jf1nN" target="_blank" class="support-button">
+      ☕ 개발자에게 후원하기
+    </a>
+    
+    <div class="footer">
+      <div class="version">v1.2</div>
+    </div>
+  </div>
+  
   <script src="popup.js"></script>
 </body>
 </html>
