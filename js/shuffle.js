@@ -34,29 +34,51 @@ class ShuffleManager {
   }
 
   /**
-   * 셔플용 CSS 스타일 주입
+   * 안전한 셔플용 CSS 스타일 주입
    * @private
    */
   injectCSS() {
+    // 기존 스타일이 있으면 제거
+    const existingStyle = document.getElementById('chzzk-shuffle-styles');
+    if (existingStyle) {
+      existingStyle.remove();
+    }
+
     const style = document.createElement('style');
     style.id = 'chzzk-shuffle-styles';
     style.textContent = `
-      /* 셔플 전용 숨김 클래스 */
-      .chzzk-hidden { 
-        display: none !important; 
+      /* 안전한 셔플 전용 숨김 클래스 - 레이아웃 보존 */
+      .chzzk-shuffle-hidden { 
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        position: relative !important; /* 레이아웃 유지 */
       }
       
-      /* 원래 스타일 복원 및 보존 - 최소한의 개입만 */
-      .navigation_bar_item__4OS5Z,
+      /* LNB 채널 영역 보호 - 절대 숨기지 않음 */
+      .navigation_bar_list__\\+d2qh,
+      .navigator_list__cHnuV,
+      .aside_content__j2eTE,
+      .navigation_bar__F4qHX {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+      }
+      
+      /* 채널 아이템들은 개별적으로만 조작 */
       .navigator_item__mH4JG,
       .navigator_item__qXlq9,
-      .navigation_bar_list__\\+d2qh,
-      .navigator_list__cHnuV {
-        /* 원래 스타일을 보존하고 강제 덮어쓰기 제거 */
+      .navigation_bar_item__4OS5Z {
+        /* 기본 스타일 유지, 강제 덮어쓰기 금지 */
       }
     `;
-    document.head.appendChild(style);
-    window.ChzzkLogger?.debug('🎨 Shuffle CSS styles injected');
+    
+    try {
+      document.head.appendChild(style);
+      window.ChzzkLogger?.info('🎨 [CSS] Safe shuffle styles injected');
+    } catch (error) {
+      window.ChzzkLogger?.error('❌ [CSS] Failed to inject styles:', error);
+    }
   }
 
   /**
@@ -381,15 +403,29 @@ class ShuffleManager {
       const list = foundList;
       const allChannelItems = providedItems || this.findChannelItems(list || document);
       
-      window.ChzzkLogger?.info(`🎯 Shuffle parameters: list=${!!list}, items=${allChannelItems?.length || 0}, mutationLock=${this.mutationLock}`);
+      window.ChzzkLogger?.info(`🎯 [SHUFFLE] Parameters: list=${!!list}, items=${allChannelItems?.length || 0}, mutationLock=${this.mutationLock}`);
       
+      // 안전성 검사 강화
       if (!list || this.mutationLock) {
-        window.ChzzkLogger?.warn('[CHZZK SHUFFLE] Shuffle skipped: no list or mutation locked');
+        window.ChzzkLogger?.warn('⚠️ [SHUFFLE] Skipped: no list or mutation locked');
         if (window.ChzzkViewerCount) {
           window.ChzzkViewerCount.scheduleUpdate();
         }
         this.isShuffling = false;
         return;
+      }
+
+      // DOM 안전성 검사
+      if (!document.contains(list)) {
+        window.ChzzkLogger?.error('❌ [SHUFFLE] List element not in DOM, aborting shuffle');
+        this.isShuffling = false;
+        return;
+      }
+
+      // LNB 컨테이너 보호 검사
+      if (this.isProtectedLNBContainer(list)) {
+        window.ChzzkLogger?.warn('🛡️ [SHUFFLE] Protected LNB container detected, using safe mode');
+        return this.performSafeShuffle(list, allChannelItems);
       }
       
       if (allChannelItems.length === 0) {
@@ -756,22 +792,177 @@ class ShuffleManager {
   }
 
   /**
+   * 보호된 LNB 컨테이너인지 확인
+   * @private
+   * @param {Element} list - 검사할 리스트 요소  
+   * @returns {boolean} 보호된 컨테이너 여부
+   */
+  isProtectedLNBContainer(list) {
+    if (!list) return false;
+    
+    const className = (list.className && typeof list.className === 'string') ? 
+                     list.className : 
+                     (list.className && list.className.baseVal ? list.className.baseVal : '');
+    
+    // 중요한 LNB 컨테이너 클래스들
+    const protectedClasses = [
+      'navigation_bar_list__+d2qh',
+      'navigator_list__cHnuV', 
+      'aside_content__j2eTE',
+      'navigation_bar__F4qHX'
+    ];
+    
+    const isProtected = protectedClasses.some(protectedClass => 
+      className.includes(protectedClass.replace('\\', ''))
+    );
+    
+    if (isProtected) {
+      window.ChzzkLogger?.warn(`🛡️ [PROTECT] Detected protected LNB container: ${className.slice(0, 50)}`);
+    }
+    
+    return isProtected;
+  }
+
+  /**
+   * 안전한 셔플 수행 (LNB 보호)
+   * @private
+   * @param {Element} list - 리스트 요소
+   * @param {Array} items - 아이템 배열
+   */
+  performSafeShuffle(list, items) {
+    try {
+      window.ChzzkLogger?.info(`🛡️ [SAFE-SHUFFLE] Starting safe shuffle for ${items.length} items`);
+      
+      if (items.length === 0) {
+        window.ChzzkLogger?.warn('⚠️ [SAFE-SHUFFLE] No items to shuffle');
+        this.isShuffling = false;
+        return;
+      }
+
+      // 현재 DOM 상태 백업
+      const originalOrder = Array.from(items).map(item => ({
+        element: item,
+        nextSibling: item.nextSibling,
+        parent: item.parentNode
+      }));
+
+      // 안전한 방식으로 셔플 수행
+      const channelContainers = this.prepareContainers(items);
+      const liveContainers = channelContainers.filter(container => container.isLive);
+      const offlineContainers = channelContainers.filter(container => !container.isLive);
+      
+      this.shuffleArray(liveContainers);
+      this.shuffleArray(offlineContainers);
+      
+      const finalOrder = [...liveContainers, ...offlineContainers];
+      
+      // DOM 조작 전 안전성 재확인
+      if (!document.contains(list)) {
+        window.ChzzkLogger?.error('❌ [SAFE-SHUFFLE] List disappeared during shuffle, restoring original order');
+        this.restoreOriginalOrder(originalOrder);
+        this.isShuffling = false;
+        return;  
+      }
+      
+      // 매우 조심스럽게 DOM 재배열
+      this.applySafeReordering(list, finalOrder);
+      
+      window.ChzzkLogger?.info(`✅ [SAFE-SHUFFLE] Safely completed shuffle of ${finalOrder.length} items`);
+      
+      // 시청자 수 숨기기 적용
+      if (window.ChzzkViewerCount) {
+        setTimeout(() => {
+          window.ChzzkViewerCount.scheduleUpdate();
+        }, 100);
+      }
+      
+      this.shuffleCompleted = true;
+      this.isShuffling = false;
+      
+    } catch (error) {
+      window.ChzzkLogger?.error('❌ [SAFE-SHUFFLE] Error in safe shuffle:', error);
+      this.isShuffling = false;
+    }
+  }
+
+  /**
+   * 안전한 DOM 재배열
+   * @private
+   * @param {Element} list - 리스트 요소
+   * @param {Array} finalOrder - 최종 순서 배열
+   */
+  applySafeReordering(list, finalOrder) {
+    try {
+      // DocumentFragment를 사용하여 안전한 DOM 조작
+      const fragment = document.createDocumentFragment();
+      
+      finalOrder.forEach(container => {
+        if (container.element && document.contains(container.element)) {
+          // 요소를 fragment로 이동 (DOM에서 제거됨)
+          fragment.appendChild(container.element);
+        }
+      });
+      
+      // 한 번에 모든 요소를 다시 삽입
+      list.appendChild(fragment);
+      
+      window.ChzzkLogger?.debug(`🔄 [SAFE-REORDER] Successfully reordered ${finalOrder.length} elements`);
+      
+    } catch (error) {
+      window.ChzzkLogger?.error('❌ [SAFE-REORDER] Error during safe reordering:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 원래 순서 복원
+   * @private
+   * @param {Array} originalOrder - 원래 순서 정보
+   */
+  restoreOriginalOrder(originalOrder) {
+    try {
+      window.ChzzkLogger?.warn('🔄 [RESTORE] Restoring original order due to error');
+      
+      originalOrder.forEach(({ element, nextSibling, parent }) => {
+        if (element && parent && document.contains(parent)) {
+          if (nextSibling && document.contains(nextSibling)) {
+            parent.insertBefore(element, nextSibling);
+          } else {
+            parent.appendChild(element);
+          }
+        }
+      });
+      
+      window.ChzzkLogger?.info('✅ [RESTORE] Original order restored');
+    } catch (error) {
+      window.ChzzkLogger?.error('❌ [RESTORE] Failed to restore original order:', error);
+    }
+  }
+
+  /**
    * 정리 함수
    */
   cleanup() {
     this.reset();
     
-    // CSS 스타일 제거
+    // CSS 스타일 제거 (더 안전하게)
     const style = document.getElementById('chzzk-shuffle-styles');
     if (style) {
       style.remove();
     }
     
-    // 숨김 클래스 제거
-    const hiddenElements = document.querySelectorAll('.chzzk-hidden');
-    hiddenElements.forEach(el => el.classList.remove('chzzk-hidden'));
+    // 숨김 클래스 제거 (안전한 클래스명으로 업데이트)
+    const hiddenElements = document.querySelectorAll('.chzzk-shuffle-hidden');
+    hiddenElements.forEach(el => {
+      el.classList.remove('chzzk-shuffle-hidden');
+      el.removeAttribute('data-chzzk-shuffle-hidden');
+    });
     
-    window.ChzzkLogger?.info('🧹 Shuffle manager cleaned up');
+    // 기존 클래스도 정리
+    const oldHiddenElements = document.querySelectorAll('.chzzk-hidden');
+    oldHiddenElements.forEach(el => el.classList.remove('chzzk-hidden'));
+    
+    window.ChzzkLogger?.info('🧹 Shuffle manager safely cleaned up');
   }
 }
 

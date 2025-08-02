@@ -24,7 +24,7 @@
     return 'universal';
   }
 
-  // 안전한 초기화 래퍼
+  // 안전한 초기화 래퍼 (강화된 오류 처리)
   function safeInitialize() {
     if (initialized) {
       window.ChzzkLogger?.warn('⚠️ Already initialized, skipping duplicate initialization');
@@ -32,14 +32,20 @@
     }
 
     try {
-      window.ChzzkLogger?.info('🚀 Starting Chzzk Sidebar Shuffler initialization...');
+      window.ChzzkLogger?.info('🚀 [INIT] Starting enhanced Chzzk Sidebar Shuffler initialization...');
       
       // 의존성 확인
       const requiredModules = ['ChzzkLogger', 'ChzzkSettings', 'ChzzkViewerCount', 'ChzzkMoreButton', 'ChzzkShuffle'];
       const missingModules = requiredModules.filter(module => !window[module]);
       
       if (missingModules.length > 0) {
-        console.error('❌ Missing required modules:', missingModules);
+        console.error('❌ [INIT] Missing required modules:', missingModules);
+        
+        // 재시도 메커니즘
+        setTimeout(() => {
+          window.ChzzkLogger?.warn('🔄 [INIT] Retrying initialization...');
+          safeInitialize();
+        }, 2000);
         return;
       }
 
@@ -47,7 +53,32 @@
       initializeExtension();
       
     } catch (error) {
-      window.ChzzkLogger?.error('💥 Critical error during initialization:', error);
+      window.ChzzkLogger?.error('💥 [INIT] Critical error during initialization:', error);
+      
+      // 복구 모드 활성화
+      activateRecoveryMode(error);
+    }
+  }
+
+  // 복구 모드 - 기본 기능이라도 작동시키기
+  function activateRecoveryMode(error) {
+    window.ChzzkLogger?.error('🚨 [RECOVERY] Activating recovery mode due to error:', error);
+    
+    try {
+      // 최소한의 기능만 활성화
+      if (window.ChzzkViewerCount) {
+        window.ChzzkViewerCount.scheduleUpdate();
+        window.ChzzkLogger?.info('✅ [RECOVERY] Viewer count hiding activated');
+      }
+      
+      // 간단한 오류 보고
+      if (typeof window.ChzzkSettings?.get === 'function') {
+        window.ChzzkLogger?.warn('🔧 [RECOVERY] Partial functionality restored');
+      }
+      
+    } catch (recoveryError) {
+      window.ChzzkLogger?.error('💥 [RECOVERY] Recovery mode also failed:', recoveryError);
+      console.error('Chzzk Sidebar Shuffler: Complete failure, all systems down');
     }
   }
 
@@ -59,7 +90,7 @@
       window.ChzzkLogger?.info('⚙️ Settings loaded successfully');
 
       // 2. 설정 변경 감지 등록
-      window.ChzzkSettings.onChange((changes, allSettings) => {
+      window.ChzzkSettings.onChange((changes) => {
         window.ChzzkLogger?.info('🔄 Settings changed:', changes);
         
         // 시청자 수 설정 변경 시 즉시 적용
