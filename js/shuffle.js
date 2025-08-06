@@ -55,14 +55,27 @@ class ShuffleManager {
         position: relative !important; /* 레이아웃 유지 */
       }
       
-      /* LNB 채널 영역 보호 - 절대 숨기지 않음 */
+      /* LNB 채널 영역 보호 - 절대 숨기지 않음, 원래 레이아웃 보존 */
       .navigation_bar_list__\\+d2qh,
       .navigator_list__cHnuV,
       .aside_content__j2eTE,
       .navigation_bar__F4qHX {
-        display: block !important;
         visibility: visible !important;
         opacity: 1 !important;
+        /* display는 건드리지 않음 - 원래 flex 레이아웃 보존 */
+      }
+      
+      /* 횡 정렬 네비게이션 바의 flex 레이아웃 보장 */
+      .navigation_bar_list__\\+d2qh.navigation_bar_horizontal__5xDnJ {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+      }
+      
+      /* 횡 정렬 아이템들도 flex 속성 보장 */
+      .navigation_bar_horizontal__5xDnJ .navigation_bar_item__4OS5Z {
+        display: flex !important;
+        flex-shrink: 0 !important;
       }
       
       /* 채널 아이템들은 개별적으로만 조작 */
@@ -572,6 +585,21 @@ class ShuffleManager {
    * @returns {boolean} 라이브 여부
    */
   isLiveChannel(container) {
+    // 1. 라이브 배지 확인 (가장 확실한 지표)
+    const liveBadgeSelectors = [
+      '.thumbnail_badge_live__rBgk, .thumbnail_badge_is_on__Hr6EA',
+      '[class*="live_badge"]', '[class*="badge_live"]'
+    ];
+    
+    for (const selector of liveBadgeSelectors) {
+      const liveBadge = container.querySelector(selector);
+      if (liveBadge) {
+        window.ChzzkLogger?.debug(`🔴 Live channel detected via badge: ${selector}`);
+        return true;
+      }
+    }
+    
+    // 2. 시청자 수 요소 확인 (숨겨진 요소도 포함)
     const viewerCountSelectors = [
       '.navigator_count__kpr6-', '.navigator_count__db5Av',
       'em[class*="count"]', 'span[class*="count"]',
@@ -581,7 +609,14 @@ class ShuffleManager {
     
     for (const selector of viewerCountSelectors) {
       const viewerCount = container.querySelector(selector);
-      if (viewerCount) return true;
+      if (viewerCount) {
+        // 텍스트 내용으로 시청자 수 패턴 확인
+        const text = viewerCount.textContent?.trim() || '';
+        if (text.match(/^\d+,?\d*명?$/) || text.match(/^\d+$/) || text.includes('명')) {
+          window.ChzzkLogger?.debug(`🔴 Live channel detected via viewer count: "${text}"`);
+          return true;
+        }
+      }
     }
     
     return false;
@@ -789,6 +824,226 @@ class ShuffleManager {
     }
     
     window.ChzzkLogger?.info('🔄 Shuffle state reset');
+  }
+
+  /**
+   * 현재 셔플 상태를 저장 (와이드모드 전환 시 사용)
+   * @returns {Object|null} 셔플 상태 객체
+   */
+  getShuffleState() {
+    try {
+      const { list } = this.findChannelsList();
+      if (!list) {
+        window.ChzzkLogger?.warn('⚠️ [STATE] No channel list found for state capture');
+        return null;
+      }
+
+      const currentChannels = this.findChannelItems(list);
+      if (currentChannels.length === 0) {
+        window.ChzzkLogger?.warn('⚠️ [STATE] No channels found for state capture');
+        return null;
+      }
+
+      // 채널별 고유 식별자와 순서 정보 저장
+      const channelOrder = currentChannels.map((channel, index) => {
+        const linkElement = channel.querySelector('a[href*="/live/"], a[href*="/channel/"]');
+        const href = linkElement ? linkElement.getAttribute('href') : null;
+        const streamerName = this.extractStreamerName(channel);
+        
+        return {
+          index: index,
+          href: href,
+          streamerName: streamerName,
+          isLive: this.isLiveChannel(channel),
+          outerHTML: channel.outerHTML.substring(0, 200) // 부분 HTML로 추가 식별
+        };
+      });
+
+      const state = {
+        timestamp: Date.now(),
+        totalChannels: currentChannels.length,
+        liveCount: channelOrder.filter(ch => ch.isLive).length,
+        offlineCount: channelOrder.filter(ch => !ch.isLive).length,
+        channelOrder: channelOrder,
+        shuffleCompleted: this.shuffleCompleted,
+        listSelector: this.getListSelector(list)
+      };
+
+      window.ChzzkLogger?.info(`💾 [STATE] Shuffle state captured: ${state.totalChannels} channels (${state.liveCount} live, ${state.offlineCount} offline)`);
+      return state;
+
+    } catch (error) {
+      window.ChzzkLogger?.error('❌ [STATE] Error capturing shuffle state:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 저장된 셔플 상태를 복원
+   * @param {Object} state - 복원할 셔플 상태
+   * @returns {boolean} 복원 성공 여부
+   */
+  restoreShuffleState(state) {
+    if (!state || !state.channelOrder) {
+      window.ChzzkLogger?.warn('⚠️ [STATE] Invalid shuffle state for restoration');
+      return false;
+    }
+
+    try {
+      const { list } = this.findChannelsList();
+      if (!list) {
+        window.ChzzkLogger?.warn('⚠️ [STATE] No channel list found for state restoration');
+        return false;
+      }
+
+      const currentChannels = this.findChannelItems(list);
+      if (currentChannels.length === 0) {
+        window.ChzzkLogger?.warn('⚠️ [STATE] No current channels found for state restoration');
+        return false;
+      }
+
+      // 상태가 너무 오래되었으면 복원하지 않음 (5분 제한)
+      const ageMinutes = (Date.now() - state.timestamp) / (1000 * 60);
+      if (ageMinutes > 5) {
+        window.ChzzkLogger?.warn(`⚠️ [STATE] Shuffle state too old (${ageMinutes.toFixed(1)} minutes), skipping restoration`);
+        return false;
+      }
+
+      // 채널 수가 크게 다르면 복원하지 않음
+      if (Math.abs(currentChannels.length - state.totalChannels) > 3) {
+        window.ChzzkLogger?.warn(`⚠️ [STATE] Channel count mismatch (current: ${currentChannels.length}, saved: ${state.totalChannels}), skipping restoration`);
+        return false;
+      }
+
+      // 현재 채널들을 저장된 순서에 맞춰 매칭
+      const channelMap = new Map();
+      currentChannels.forEach(channel => {
+        const linkElement = channel.querySelector('a[href*="/live/"], a[href*="/channel/"]');
+        const href = linkElement ? linkElement.getAttribute('href') : null;
+        const streamerName = this.extractStreamerName(channel);
+        
+        if (href) {
+          channelMap.set(href, channel);
+        } else if (streamerName) {
+          channelMap.set(`name:${streamerName}`, channel);
+        }
+      });
+
+      // 저장된 순서대로 채널 재배치
+      const orderedChannels = [];
+      let matchedCount = 0;
+
+      state.channelOrder.forEach(savedChannel => {
+        let matchedChannel = null;
+        
+        // href로 먼저 매칭 시도
+        if (savedChannel.href && channelMap.has(savedChannel.href)) {
+          matchedChannel = channelMap.get(savedChannel.href);
+          channelMap.delete(savedChannel.href);
+        }
+        // 스트리머 이름으로 매칭 시도
+        else if (savedChannel.streamerName && channelMap.has(`name:${savedChannel.streamerName}`)) {
+          matchedChannel = channelMap.get(`name:${savedChannel.streamerName}`);
+          channelMap.delete(`name:${savedChannel.streamerName}`);
+        }
+
+        if (matchedChannel) {
+          orderedChannels.push(matchedChannel);
+          matchedCount++;
+        }
+      });
+
+      // 매칭되지 않은 새 채널들은 끝에 추가
+      channelMap.forEach(unmatchedChannel => {
+        orderedChannels.push(unmatchedChannel);
+      });
+
+      // DOM 재배치
+      this.isShuffling = true;
+      
+      // 기존 채널들 제거
+      currentChannels.forEach(channel => {
+        if (channel.parentNode) {
+          channel.remove();
+        }
+      });
+
+      // 복원된 순서로 재배치
+      orderedChannels.forEach((channel, index) => {
+        try {
+          list.appendChild(channel);
+          
+          // 시청자 수 숨기기 적용
+          if (window.ChzzkViewerCount) {
+            window.ChzzkViewerCount.hideAll(channel);
+          }
+        } catch (error) {
+          window.ChzzkLogger?.warn(`⚠️ [STATE] Error placing channel at position ${index}:`, error);
+        }
+      });
+
+      this.shuffleCompleted = state.shuffleCompleted;
+      this.isShuffling = false;
+
+      const successRate = (matchedCount / state.totalChannels * 100).toFixed(1);
+      window.ChzzkLogger?.info(`✅ [STATE] Shuffle state restored: ${matchedCount}/${state.totalChannels} channels matched (${successRate}%)`);
+      
+      return true;
+
+    } catch (error) {
+      window.ChzzkLogger?.error('❌ [STATE] Error restoring shuffle state:', error);
+      this.isShuffling = false;
+      return false;
+    }
+  }
+
+  /**
+   * 리스트 요소의 CSS 셀렉터 추출
+   * @private
+   * @param {Element} list - 리스트 요소
+   * @returns {string} CSS 셀렉터
+   */
+  getListSelector(list) {
+    if (!list) return '';
+    
+    if (list.id) return `#${list.id}`;
+    if (list.className) {
+      const classes = list.className.split(' ').filter(cls => cls.trim());
+      if (classes.length > 0) {
+        return `.${classes[0]}`;
+      }
+    }
+    return list.tagName.toLowerCase();
+  }
+
+  /**
+   * 채널에서 스트리머 이름 추출
+   * @private
+   * @param {Element} channel - 채널 요소
+   * @returns {string|null} 스트리머 이름
+   */
+  extractStreamerName(channel) {
+    try {
+      // 닉네임 클래스들 순서대로 확인
+      const nameSelectors = [
+        '.navigator_name__k4Sc2',
+        '.name_text__yQG50', 
+        'strong',
+        '[class*="name"]',
+        '[class*="nick"]'
+      ];
+
+      for (const selector of nameSelectors) {
+        const nameElement = channel.querySelector(selector);
+        if (nameElement && nameElement.textContent.trim()) {
+          return nameElement.textContent.trim();
+        }
+      }
+
+      return null;
+    } catch (error) {
+      return null;
+    }
   }
 
   /**

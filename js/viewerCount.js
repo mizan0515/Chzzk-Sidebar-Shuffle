@@ -94,11 +94,27 @@ class ViewerCountManager {
         overflow: hidden !important;
       }
       
-      /* 기존 레이아웃 보호 */
-      .chzzk-viewer-hidden * {
+      /* 기존 레이아웃 보호 - 정밀한 선택자 사용 */
+      .chzzk-viewer-hidden:not(.navigator_item__mH4JG):not(.navigator_item__qXlq9) * {
         visibility: hidden !important;
         opacity: 0 !important;
         color: transparent !important;
+      }
+      
+      /* 스트리머 닉네임과 채널 이름은 보호 */
+      .chzzk-viewer-hidden .navigator_information__sT7qv,
+      .chzzk-viewer-hidden .navigator_name__k4Sc2,
+      .chzzk-viewer-hidden .name_text__yQG50,
+      .chzzk-viewer-hidden .navigator_content__K38XA,
+      .chzzk-viewer-hidden .navigator_title__oExun,
+      .chzzk-viewer-hidden .video_card_name__dOHzK,
+      .chzzk-viewer-hidden a[href*="/live/"]:not(:has(.thumbnail_badge_container__sMIz3)),
+      .chzzk-viewer-hidden a[href*="/channel/"]:not(:has(.thumbnail_badge_container__sMIz3)) {
+        visibility: visible !important;
+        opacity: 1 !important;
+        color: inherit !important;
+        font-size: inherit !important;
+        line-height: inherit !important;
       }
       
       /* 토글 켜져있을 때 강제 숨김 (추가 보험) */
@@ -1085,7 +1101,7 @@ class ViewerCountManager {
     if (!parent) return result;
 
     // 형제 요소 중 LIVE 배지 확인
-    const liveBadge = parent.querySelector('.thumbnail_badge_live__rBgk+, .thumbnail_badge_is_on__Hr6EA');
+    const liveBadge = parent.querySelector('.thumbnail_badge_live__rBgk, .thumbnail_badge_is_on__Hr6EA');
     if (liveBadge && liveBadge !== element) {
       result.score += 8;
       result.factors.push('has_live_sibling');
@@ -1189,6 +1205,12 @@ class ViewerCountManager {
         return;
       }
 
+      // 스트리머 닉네임이 포함된 컨테이너인지 확인 (보호)
+      if (this.containsStreamerName(element)) {
+        window.ChzzkLogger?.warn(`⚠️ [HIDE] Skipping element containing streamer name: ${element.textContent?.trim().slice(0, 30)}`);
+        return;
+      }
+
       // 안전한 방식으로 숨기기
       element.classList.add('chzzk-viewer-hidden');
       element.setAttribute('data-chzzk-hidden', 'true');
@@ -1256,6 +1278,75 @@ class ViewerCountManager {
       return true;
     }
 
+    return false;
+  }
+
+  /**
+   * 스트리머 닉네임이 포함된 컨테이너인지 확인
+   * @private
+   * @param {Element} element - 확인할 요소
+   * @returns {boolean} 스트리머 닉네임 포함 여부
+   */
+  containsStreamerName(element) {
+    const className = (element.className && typeof element.className === 'string') ? 
+                     element.className : 
+                     (element.className && element.className.baseVal ? element.className.baseVal : '');
+    
+    // 스트리머/채널 이름 관련 클래스들 (HTML 구조 기반)
+    const nameClasses = [
+      'navigator_information__sT7qv',  // LNB 정보 컨테이너 (닉네임 포함)
+      'navigator_name__k4Sc2',         // LNB 닉네임 직접 클래스
+      'name_text__yQG50',              // 닉네임 텍스트 클래스
+      'navigator_content__K38XA',      // LNB 채널 이름
+      'navigator_title__oExun',        // LNB 제목
+      'video_card_name__dOHzK',        // 카드 채널 이름
+      'channel_name',                  // 일반적인 채널 이름
+      'streamer_name',                 // 스트리머 이름
+      'creator_name'                   // 크리에이터 이름
+    ];
+    
+    // 클래스명으로 확인
+    const hasNameClass = nameClasses.some(nameClass => 
+      className.includes(nameClass)
+    );
+    
+    if (hasNameClass) {
+      return true;
+    }
+    
+    // 자식 요소에 닉네임 클래스가 있는지 확인
+    const hasNameChild = element.querySelector && (
+      element.querySelector('.navigator_name__k4Sc2') ||
+      element.querySelector('.name_text__yQG50') ||
+      element.querySelector('.navigator_content__K38XA')
+    );
+    
+    if (hasNameChild) {
+      return true;
+    }
+    
+    // 텍스트 내용이 시청자 수 패턴이 아닌 경우 (닉네임일 가능성)
+    const text = element.textContent?.trim() || '';
+    const isViewerCount = text.match(/^\d+,?\d*명?$/) || text.match(/^\d+$/) || text.includes('명');
+    
+    // 링크 요소이면서 시청자 수가 아닌 경우 (닉네임 링크)
+    if (element.tagName === 'A' && element.href && !isViewerCount && text.length > 0) {
+      return true;
+    }
+    
+    // navigator_information__sT7qv 컨테이너는 무조건 보호 (비방송 채널 닉네임 포함)
+    if (className.includes('navigator_information__sT7qv')) {
+      // 하지만 시청자 수가 있는 라이브 채널의 경우 시청자 수만 숨기고 싶으므로
+      // 이 컨테이너 내부에 시청자 수 요소가 있는지 확인
+      const hasViewerCount = element.parentElement && 
+                           element.parentElement.querySelector('.navigator_count__kpr6-');
+      
+      // 시청자 수가 없는 비방송 채널이거나, 자신이 닉네임 요소인 경우 보호
+      if (!hasViewerCount || element.querySelector('.navigator_name__k4Sc2, .name_text__yQG50')) {
+        return true;
+      }
+    }
+    
     return false;
   }
 
@@ -1757,8 +1848,10 @@ class ViewerCountManager {
       
       // 형제 요소 분석
       const siblings = Array.from(parent.children);
-      const hasLiveBadge = siblings.some(sibling => 
-        sibling.className && sibling.className.includes('live'));
+      const hasLiveBadge = siblings.some(sibling => {
+        const className = sibling.className;
+        return className && typeof className === 'string' && className.includes('live');
+      });
       if (hasLiveBadge) probability += 0.1;
     }
     

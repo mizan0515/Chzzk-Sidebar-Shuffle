@@ -275,29 +275,46 @@ class MoreButtonManager {
     // 클릭 전 채널 수 저장을 위한 변수
     let previousChannelCount = 0;
     
-    // 원래 버튼 클릭 이벤트에 점진적 셔플 추가
+    // 원래 버튼 클릭 이벤트에 점진적 셔플 추가 (강화된 버전)
     originalButton.addEventListener('click', () => {
       // 클릭 전 채널 수 확인
       const beforeItems = list.querySelectorAll('.navigator_item__mH4JG, .navigator_item__qXlq9, a[href*="/live/"], a[href*="/channel/"]');
       previousChannelCount = beforeItems.length;
       
-      window.ChzzkLogger?.info(`🖱️ 더보기 버튼 클릭 - 현재 채널 수: ${previousChannelCount}`);
+      const buttonState = originalButton.getAttribute('aria-expanded');
+      const isExpanding = buttonState === 'false';
       
-      // 원래 동작 완료 후 점진적 셔플 실행
+      window.ChzzkLogger?.info(`🖱️ 더보기 버튼 클릭 - 현재 채널 수: ${previousChannelCount}, 상태: ${isExpanding ? '확장' : '축소'}`);
+      
+      // 원래 동작 완료 후 처리
       setTimeout(() => {
         const afterItems = list.querySelectorAll('.navigator_item__mH4JG, .navigator_item__qXlq9, a[href*="/live/"], a[href*="/channel/"]');
         const newChannelCount = afterItems.length;
         
         window.ChzzkLogger?.info(`📊 더보기 클릭 후 채널 수: ${previousChannelCount} → ${newChannelCount}`);
         
-        // 새 채널이 추가된 경우 점진적 셔플 실행
-        if (newChannelCount > previousChannelCount) {
-          const newChannels = Array.from(afterItems).slice(previousChannelCount);
-          window.ChzzkLogger?.info(`🔄 ${newChannels.length}개 새 채널 발견, 점진적 셔플 실행`);
-          
-          if (window.ChzzkShuffle && window.ChzzkShuffle.progressiveShuffle) {
-            window.ChzzkShuffle.progressiveShuffle(list, newChannels);
+        if (isExpanding) {
+          // 확장 시: 새 채널이 추가되었다면 점진적 셔플, 그렇지 않으면 전체 셔플
+          if (newChannelCount > previousChannelCount) {
+            const newChannels = Array.from(afterItems).slice(previousChannelCount);
+            window.ChzzkLogger?.info(`🔄 ${newChannels.length}개 새 채널 발견, 점진적 셔플 실행`);
+            
+            if (window.ChzzkShuffle && window.ChzzkShuffle.progressiveShuffle) {
+              window.ChzzkShuffle.progressiveShuffle(list, newChannels);
+            }
+          } else {
+            // 새 채널이 없어도 전체 셔플 실행 (와이드모드 복구 등의 경우)
+            window.ChzzkLogger?.info(`🎲 새 채널이 없지만 전체 채널 셔플 실행 (${newChannelCount}개)`);
+            
+            if (window.ChzzkShuffle && window.ChzzkSettings?.get('enableShuffle')) {
+              // 전체 리셋 후 새로 셔플
+              window.ChzzkShuffle.reset();
+              window.ChzzkShuffle.performShuffle(list, Array.from(afterItems), true);
+            }
           }
+        } else {
+          // 축소 시: 시청자 수 숨기기만 적용 (셔플 상태는 유지)
+          window.ChzzkLogger?.info('📦 더보기 버튼 축소 - 셔플 상태 유지');
         }
         
         // 시청자 수 숨기기 적용
@@ -306,7 +323,7 @@ class MoreButtonManager {
         }
         
         window.ChzzkLogger?.debug('🙈 더보기 버튼 클릭 후 시청자 수 숨기기 완료');
-      }, 300); // 더 긴 지연으로 DOM 업데이트 대기
+      }, 500); // 더 긴 지연으로 DOM 업데이트 대기 (300ms → 500ms)
     });
     
     window.ChzzkLogger?.info('✅ 더보기 버튼 점진적 로딩 지원 설정 완료');
