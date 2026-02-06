@@ -1,3 +1,9 @@
 
 # YoYo AI version control directory
 .yoyo/
+
+# Claude Code local settings
+.claude/
+
+# VS Code settings
+.vscode/
