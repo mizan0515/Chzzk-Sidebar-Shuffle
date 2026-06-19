@@ -13,6 +13,48 @@ class MoreButtonManager {
   constructor() {
     this.created = false;
     this.expandCallbacks = new Set();
+    this.autoObserver = null;
+    this.autoTimer = null;
+    this.lastAutoExpandAt = 0;
+    this.lastExpandedHref = '';
+  }
+
+  findExpandButton() {
+    const selectors = [
+      '[class*="navigation_bar_more_button__"]',
+      'button[aria-expanded="false"][class*="more"]',
+      'button[aria-expanded="false"][class*="navigation_bar"]',
+      'button[aria-expanded="false"][class*="navigator"]',
+      'nav[class*="navigation_bar"] button[aria-expanded="false"]',
+      'aside:not([class*="chat"]) button[aria-expanded="false"]'
+    ];
+
+    for (const selector of selectors) {
+      const buttons = window.ChzzkDom?.safeQueryAll(document, selector) || Array.from(document.querySelectorAll(selector));
+      const button = buttons.find(candidate => this.isFollowingExpandButton(candidate));
+      if (button) return button;
+    }
+
+    return this.findButtonByText() || this.findButtonByAria();
+  }
+
+  isFollowingExpandButton(button) {
+    if (!button || button.disabled) return false;
+    const text = button.textContent?.trim() || '';
+    const ariaLabel = button.getAttribute('aria-label') || '';
+    const ariaExpanded = button.getAttribute('aria-expanded');
+    const className = typeof button.className === 'string' ? button.className : '';
+    const inLnb = !!button.closest?.('aside:not([class*="chat"]), nav[class*="navigation_bar"], [class*="aside_content"], [class*="navigation_bar"]');
+    const looksLikeMore = className.includes('navigation_bar_more_button') ||
+      className.includes('navigator_button_more') ||
+      text.includes('더보기') ||
+      text.includes('펼치기') ||
+      text.includes('Show more') ||
+      ariaLabel.includes('더보기') ||
+      ariaLabel.includes('펼치기') ||
+      ariaLabel.toLowerCase().includes('more');
+
+    return inLnb && ariaExpanded !== 'true' && looksLikeMore;
   }
 
   /**
@@ -25,70 +67,20 @@ class MoreButtonManager {
     try {
       window.ChzzkLogger?.info('🔧 Attempting to expand sidebar...');
       
-      // 더보기 버튼을 찾는 여러 방법 (우선순위 순서로 개선)
-      const expandButtonSelectors = [
-        '.navigation_bar_more_button__7DoyA', // 가장 구체적인 클래스
-        'button[aria-expanded="false"]',
-        'button[aria-label*="더보기"]',
-        'button[aria-label*="펼쳐짐"]',
-        '.navigator_button_more__UE0v3',
-        'button[class*="navigator_button"]',
-        'button[class*="more"]',
-        '.aside_content__j2eTE button',
-        'nav[class*="navigation_bar"] button'
-      ];
-      
-      let moreBtn = null;
-      let foundSelector = '';
-      
-      // 여러 셀렉터로 순차 검색
-      for (const selector of expandButtonSelectors) {
-        try {
-          moreBtn = document.querySelector(selector);
-          if (moreBtn) {
-            foundSelector = selector;
-            window.ChzzkLogger?.info(`✓ Found expand button with selector: ${selector}`);
-            window.ChzzkLogger?.debug('Button details:', {
-              tagName: moreBtn.tagName,
-              className: moreBtn.className,
-              textContent: moreBtn.textContent?.trim(),
-              ariaExpanded: moreBtn.getAttribute('aria-expanded'),
-              ariaLabel: moreBtn.getAttribute('aria-label')
-            });
-            break;
-          }
-        } catch (error) {
-          window.ChzzkLogger?.warn(`❌ Error with expand button selector ${selector}:`, error);
-        }
-      }
-      
-      // 텍스트 기반으로 찾기 (fallback)
-      if (!moreBtn) {
-        moreBtn = this.findButtonByText();
-        if (moreBtn) {
-          foundSelector = 'text-based';
-        }
-      }
-      
-      // aria-expanded 속성으로 찾기 (최종 fallback)
-      if (!moreBtn) {
-        moreBtn = this.findButtonByAria();
-        if (moreBtn) {
-          foundSelector = 'aria-expanded';
-        }
-      }
+      const moreBtn = this.findExpandButton();
+      const foundSelector = moreBtn ? 'semantic-lnb-more-button' : '';
       
       // 버튼 클릭 시도
       if (moreBtn) {
         this.clickExpandButton(moreBtn, foundSelector, callback);
       } else {
         window.ChzzkLogger?.warn('⚠️ No expand button found - this might cause incomplete channel loading');
-        callback();
+        callback?.();
       }
       
     } catch (error) {
       window.ChzzkLogger?.error('💥 Error in forceExpand:', error);
-      callback();
+      callback?.();
     }
     
     const duration = Date.now() - startTime;
@@ -105,7 +97,7 @@ class MoreButtonManager {
     const buttons = document.querySelectorAll('button');
     const moreBtn = Array.from(buttons).find(btn => {
       const text = btn.textContent?.trim();
-      return text && (text.includes('더보기') || text.includes('펼치기') || text.includes('expand') || text.includes('Show more'));
+      return text && this.isFollowingExpandButton(btn) && (text.includes('더보기') || text.includes('펼치기') || text.includes('expand') || text.includes('Show more'));
     });
     
     if (moreBtn) {
@@ -123,9 +115,7 @@ class MoreButtonManager {
   findButtonByAria() {
     window.ChzzkLogger?.info('🔍 Searching for expand button by aria-expanded=false...');
     const ariaButtons = document.querySelectorAll('button[aria-expanded]');
-    const moreBtn = Array.from(ariaButtons).find(btn => 
-      btn.getAttribute('aria-expanded') === 'false'
-    );
+    const moreBtn = Array.from(ariaButtons).find(btn => this.isFollowingExpandButton(btn));
     
     if (moreBtn) {
       window.ChzzkLogger?.info('✓ Found expand button by aria-expanded=false');
@@ -172,7 +162,7 @@ class MoreButtonManager {
         });
         
         // 추가 로딩 시간을 위해 더 긴 지연
-        callback();
+        callback?.();
       }, 200);
       
       return;
@@ -181,7 +171,70 @@ class MoreButtonManager {
     }
     
     // 버튼이 없거나 이미 확장된 경우 즉시 콜백 실행
-    callback();
+    callback?.();
+  }
+
+  autoExpand(reason = 'auto') {
+    if (window.ChzzkSettings && window.ChzzkSettings.get('enableAutoExpand') === false) {
+      return false;
+    }
+
+    const now = Date.now();
+    const pageKey = window.location.href;
+    if (this.lastExpandedHref === pageKey && now - this.lastAutoExpandAt < 3000) {
+      return false;
+    }
+
+    const button = this.findExpandButton();
+    if (!button) return false;
+
+    this.lastExpandedHref = pageKey;
+    this.lastAutoExpandAt = now;
+    window.ChzzkLogger?.info(`[AUTO-EXPAND] LNB expand requested (${reason})`);
+    this.clickExpandButton(button, reason, () => {
+      const { list } = window.ChzzkShuffle?.findChannelsList?.() || {};
+      if (list) {
+        this.enhanceOriginal(button, list);
+        window.ChzzkStar?.injectAllStarButtons?.(list);
+      }
+    });
+    return true;
+  }
+
+  startAutoExpand() {
+    this.stopAutoExpand();
+    const attempt = (reason) => this.autoExpand(reason);
+
+    setTimeout(() => attempt('initial-300ms'), 300);
+    setTimeout(() => attempt('initial-1000ms'), 1000);
+    setTimeout(() => attempt('initial-2500ms'), 2500);
+
+    this.autoObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+          setTimeout(() => attempt('mutation'), 100);
+          break;
+        }
+      }
+    });
+
+    if (document.body) {
+      this.autoObserver.observe(document.body, { childList: true, subtree: true });
+    }
+
+    this.autoTimer = setInterval(() => attempt('interval'), 5000);
+    window.ChzzkLogger?.info('[AUTO-EXPAND] Auto expand monitor started');
+  }
+
+  stopAutoExpand() {
+    if (this.autoObserver) {
+      this.autoObserver.disconnect();
+      this.autoObserver = null;
+    }
+    if (this.autoTimer) {
+      clearInterval(this.autoTimer);
+      this.autoTimer = null;
+    }
   }
 
   /**
@@ -196,7 +249,7 @@ class MoreButtonManager {
     }
     
     // 원래 더보기 버튼이 있는지 확인
-    const originalMoreButton = document.querySelector('.navigation_bar_more_button__7DoyA');
+    const originalMoreButton = this.findExpandButton();
     if (originalMoreButton) {
       window.ChzzkLogger?.info('👍 원래 더보기 버튼을 사용합니다. 새로 생성하지 않습니다.');
       this.enhanceOriginal(originalMoreButton, list);
@@ -391,6 +444,7 @@ class MoreButtonManager {
     });
     
     this.reset();
+    this.stopAutoExpand();
     window.ChzzkLogger?.info('🧹 More button manager cleaned up');
   }
 }

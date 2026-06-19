@@ -6,7 +6,10 @@
 // 기본 설정값
 const DEFAULT_SETTINGS = {
   hideViewerCount: true,
-  enableShuffle: true
+  enableShuffle: true,
+  enableStar: true,
+  enableTierSort: true,
+  enableAutoExpand: true
 };
 
 // 현재 설정 상태
@@ -41,7 +44,10 @@ class SettingsManager {
         // 기본값과 저장된 값 병합
         this.settings = {
           hideViewerCount: result.hideViewerCount !== undefined ? result.hideViewerCount : DEFAULT_SETTINGS.hideViewerCount,
-          enableShuffle: result.enableShuffle !== undefined ? result.enableShuffle : DEFAULT_SETTINGS.enableShuffle
+          enableShuffle: result.enableShuffle !== undefined ? result.enableShuffle : DEFAULT_SETTINGS.enableShuffle,
+          enableStar: result.enableStar !== undefined ? result.enableStar : DEFAULT_SETTINGS.enableStar,
+          enableTierSort: result.enableTierSort !== undefined ? result.enableTierSort : DEFAULT_SETTINGS.enableTierSort,
+          enableAutoExpand: result.enableAutoExpand !== undefined ? result.enableAutoExpand : DEFAULT_SETTINGS.enableAutoExpand
         };
       }
       

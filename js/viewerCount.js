@@ -71,7 +71,7 @@ class ViewerCountManager {
       }
       
       /* 시청자 수만 포함된 배지 컨테이너 (LIVE 배지 제외) */
-      span.thumbnail_badge_container__sMIz3:not(.thumbnail_badge_live__rBgk+):not(.thumbnail_badge_is_on__Hr6EA).chzzk-viewer-hidden {
+      span[class*="thumbnail_badge_container"]:not([class*="live"]):not([class*="is_on"]).chzzk-viewer-hidden {
         visibility: hidden !important;
         opacity: 0 !important;
         font-size: 0 !important;
@@ -118,7 +118,7 @@ class ViewerCountManager {
       }
       
       /* 토글 켜져있을 때 강제 숨김 (추가 보험) */
-      body.chzzk-hide-viewer-count span.thumbnail_badge_container__sMIz3:not(.thumbnail_badge_live__rBgk+):not(.thumbnail_badge_is_on__Hr6EA) {
+      body.chzzk-hide-viewer-count span[class*="thumbnail_badge_container"]:not([class*="live"]):not([class*="is_on"]) {
         visibility: hidden !important;
         opacity: 0 !important;
         font-size: 0 !important;
@@ -254,10 +254,10 @@ class ViewerCountManager {
         // === 1단계: 정확한 셀렉터 (최고 성능 + 강건성) ===
         
         // 카드 뷰 시청자 수 (HTML 기반 초정밀 매칭 - 문제 해결 강화)
-        'span.thumbnail_badge_container__sMIz3:not(.thumbnail_badge_live__rBgk+):not(.thumbnail_badge_is_on__Hr6EA)', // 정확한 LIVE 배지 제외
+        'span[class*="thumbnail_badge_container"]:not([class*="live"]):not([class*="is_on"])',
         '.video_card_description__2sUfw > span.thumbnail_badge_container__sMIz3:not([class*="live"])', // 직접 자식 선택
         '.video_card_container__urjO6 .video_card_description__2sUfw span.thumbnail_badge_container__sMIz3:not([class*="live"])', // 전체 경로
-        '.video_card_vertical__+gTMT .video_card_description__2sUfw > span.thumbnail_badge_container__sMIz3:not([class*="live"])', // 수직 카드 전용
+        '[class*="video_card_vertical"] [class*="video_card_description"] > span[class*="thumbnail_badge_container"]:not([class*="live"])',
         
         // 추가 백업 셀렉터 (더 포괄적)
         'span.thumbnail_badge_container__sMIz3:not(:has(svg)):not(:has(.blind))', // SVG나 blind 클래스가 없는 경우
@@ -265,8 +265,8 @@ class ViewerCountManager {
         
         // 라이브 페이지 현재 시청자 수 (HTML 기반 정확한 셀렉터)
         'strong.video_information_count__Y05sI', // 가장 정확한 셀렉터
-        '.video_information_data__w3P+x strong.video_information_count__Y05sI',
-        '.video_information_row__HrQ0z .video_information_data__w3P+x strong',
+        '[class*="video_information_data"] strong.video_information_count__Y05sI',
+        '.video_information_row__HrQ0z [class*="video_information_data"] strong',
         '.video_information_status__YKGeL strong.video_information_count__Y05sI',
         
         // LNB 사이드바 시청자 수 (초정밀 매칭 - 문제 해결 핵심)
@@ -303,7 +303,7 @@ class ViewerCountManager {
         '[class*="navigation_bar"] em:not(.blind):not([class*="name"])', // 네비게이션 바 em
         
         // 라이브 페이지 백업 (HTML 구조 기반 강화)
-        '.video_information_data__w3P+x strong', // 정확한 컨테이너
+        '[class*="video_information_data"] strong',
         '.video_information_row__HrQ0z strong', // 부모 컨테이너  
         '[class*="video_information_count"] strong', // 클래스 패턴
         '[class*="video_information_data"] strong', // 데이터 컨테이너 패턴
@@ -643,7 +643,7 @@ class ViewerCountManager {
       // LNB 구조적 경로  
       '.navigator_item__mH4JG em.navigator_count__kpr6-',
       // 라이브 정보 구조적 경로
-      '.video_information_data__w3P+x strong.video_information_count__Y05sI'
+      '[class*="video_information_data"] strong.video_information_count__Y05sI'
     ];
     
     for (const path of structuralPaths) {
@@ -769,7 +769,7 @@ class ViewerCountManager {
 
     // 라이브 정보 창에서는 더 엄격한 조건 적용
     const isInLiveInfo = element.closest('.live_information_player__lYPjg');
-    const isInLiveContainer = element.closest('.video_information_data__w3P+x') ||
+    const isInLiveContainer = element.closest('[class*="video_information_data"]') ||
                              element.closest('.video_information_row__HrQ0z');
     
     if (isInLiveInfo) {
@@ -872,7 +872,7 @@ class ViewerCountManager {
 
     // 라이브 페이지 정확한 컨테이너 확인
     const liveContainers = [
-      '.video_information_data__w3P+x',
+      '[class*="video_information_data"]',
       '.video_information_row__HrQ0z',
       '.video_information_status__YKGeL'
     ];
@@ -889,7 +889,7 @@ class ViewerCountManager {
     const cardContainers = [
       '.video_card_container__urjO6',
       '.video_card_description__2sUfw',
-      '.video_card_vertical__+gTMT'
+      '[class*="video_card_vertical"]'
     ];
     
     for (const containerSelector of cardContainers) {
@@ -1074,7 +1074,7 @@ class ViewerCountManager {
     const preciseContainers = [
       { selector: '.navigator_item__mH4JG', score: 12, desc: 'navigator_item' },
       { selector: '.video_card_description__2sUfw', score: 10, desc: 'card_description' },
-      { selector: '.video_information_data__w3P+x', score: 15, desc: 'live_info_data' }
+      { selector: '[class*="video_information_data"]', score: 15, desc: 'live_info_data' }
     ];
 
     for (const container of preciseContainers) {
@@ -1408,7 +1408,7 @@ class ViewerCountManager {
     const priorityContainers = [];
 
     // 라이브 페이지 컨테이너 (최우선)
-    const liveContainers = container.querySelectorAll('.video_information_data__w3P+x, .video_information_row__HrQ0z');
+    const liveContainers = container.querySelectorAll('[class*="video_information_data"], .video_information_row__HrQ0z');
     liveContainers.forEach(el => {
       priorityContainers.push({ element: el, type: 'live_page', priority: 1 });
     });
@@ -2022,7 +2022,7 @@ class ViewerCountManager {
     
     // 라이브 페이지 주요 컨테이너들을 직접 스캔
     const liveContainers = [
-      '.video_information_data__w3P+x',
+      '[class*="video_information_data"]',
       '.video_information_row__HrQ0z', 
       '.video_information_status__YKGeL',
       '.live_information_player__lYPjg'
@@ -2249,7 +2249,7 @@ class ViewerCountManager {
     
     // 라이브 페이지 핵심 컨테이너들 직접 스캔
     const liveContainers = [
-      '.video_information_data__w3P+x',
+      '[class*="video_information_data"]',
       '.video_information_row__HrQ0z',
       '.video_information_status__YKGeL'
     ];
@@ -2399,10 +2399,10 @@ class ViewerCountManager {
     // 카드 뷰 시청자 수 요소들 직접 스캔
     const cardViewerSelectors = [
       // 정확한 카드 뷰 시청자 수 셀렉터들
-      'span.thumbnail_badge_container__sMIz3:not(.thumbnail_badge_live__rBgk+):not(.thumbnail_badge_is_on__Hr6EA)',
-      '.video_card_description__2sUfw span:not(.thumbnail_badge_live__rBgk+)',
+      'span[class*="thumbnail_badge_container"]:not([class*="live"]):not([class*="is_on"])',
+      '.video_card_description__2sUfw span:not([class*="live"])',
       '.video_card_container__urjO6 span.thumbnail_badge_container__sMIz3',
-      '.video_card_vertical__+gTMT span.thumbnail_badge_container__sMIz3'
+      '[class*="video_card_vertical"] span.thumbnail_badge_container__sMIz3'
     ];
     
     let cardHiddenCount = 0;
@@ -2703,7 +2703,7 @@ class ViewerCountManager {
     // 텍스트 패턴 기반 확인 (통합 강화)
     if (/\d+.*명/.test(text) || /\d+.*시청/.test(text) || /^\d{1,3}(,\d{3})*$/.test(text)) {
       // 라이브 컨테이너 내부인지 확인
-      const isInLiveContainer = element.closest('.video_information_data__w3P+x') ||
+      const isInLiveContainer = element.closest('[class*="video_information_data"]') ||
                                element.closest('.video_information_row__HrQ0z') ||
                                element.closest('[class*="video_information"]');
       
