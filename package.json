@@ -14,6 +14,7 @@
     "qa:main:required": "node scripts/check-main-browser-readiness.mjs --require-main",
     "qa:main:whale:plan": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/Start-MainWhaleQa.ps1",
     "qa:main:whale:start": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/Start-MainWhaleQa.ps1 -Apply",
+    "qa:main:whale:realuse": "node scripts/qa-main-whale-realuse.mjs",
     "guard:completion": "node scripts/check-completion-guard.mjs",
     "guard:completion:allow-main-unverified": "node scripts/check-completion-guard.mjs --allow-main-unverified",
     "assets:store": "node scripts/generate-store-assets.mjs",
