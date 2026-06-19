@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>치지직 티어 정렬</title>
+  <link rel="stylesheet" href="sidebar.css">
+</head>
+<body>
+  <main class="sidebar-shell">
+    <header class="toolbar">
+      <div>
+        <h1>치지직 티어</h1>
+        <p id="connectionText" role="status" aria-live="polite">치지직 탭 연결 확인 중</p>
+      </div>
+      <button class="icon-button" id="refreshBtn" type="button" title="새로고침" aria-label="새로고침">
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M20 11a8.1 8.1 0 0 0-14.7-4.6L4 8"></path>
+          <path d="M4 4v4h4"></path>
+          <path d="M4 13a8.1 8.1 0 0 0 14.7 4.6L20 16"></path>
+          <path d="M20 20v-4h-4"></path>
+        </svg>
+      </button>
+    </header>
+
+    <section class="status-strip" aria-label="현재 상태">
+      <div class="connection-pill" id="tabState">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="tabStateText">확인 중</span>
+      </div>
+      <div class="metric">
+        <strong id="favoriteCount">0</strong>
+        <span>즐겨찾기</span>
+      </div>
+      <div class="metric">
+        <strong id="assignedCount">0</strong>
+        <span>배정됨</span>
+      </div>
+    </section>
+
+    <section class="action-row" aria-label="정렬 동작">
+      <button class="secondary" id="openChzzkBtn" type="button">
+        <span class="button-content">
+          <span class="icon-slot">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M7 17 17 7"></path>
+              <path d="M8 7h9v9"></path>
+            </svg>
+          </span>
+          치지직 열기
+        </span>
+      </button>
+      <button class="primary" id="applyBtn" type="button">
+        <span class="button-content">
+          <span class="icon-slot">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="m4 12 5 5L20 6"></path>
+            </svg>
+          </span>
+          정렬 적용
+        </span>
+      </button>
+      <button class="secondary" id="shuffleBtn" type="button">
+        <span class="button-content">
+          <span class="icon-slot">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M16 3h5v5"></path>
+              <path d="M4 20 21 3"></path>
+              <path d="M21 16v5h-5"></path>
+              <path d="M15 15 21 21"></path>
+              <path d="M4 4l5 5"></path>
+            </svg>
+          </span>
+          그룹 셔플
+        </span>
+      </button>
+    </section>
+
+    <label class="search">
+      <span>검색</span>
+      <input id="searchInput" type="search" placeholder="스트리머 이름 검색">
+    </label>
+
+    <section class="tiers" id="tiers" aria-label="티어 목록"></section>
+
+    <section class="unassigned">
+      <div class="section-title">
+        <h2>미분류 즐겨찾기</h2>
+        <span id="unassignedCount">0</span>
+      </div>
+      <div class="drop-zone" id="unassignedList" data-tier-id="">즐겨찾기를 여기에 놓으면 미분류로 유지됩니다.</div>
+    </section>
+
+    <section class="all-channels">
+      <div class="section-title">
+        <h2>즐겨찾기에 추가</h2>
+        <span id="channelCount">0</span>
+      </div>
+      <div class="channel-list" id="channelList"></div>
+    </section>
+
+    <section class="activity-panel">
+      <div class="section-title">
+        <h2>활동 추적</h2>
+        <span id="activityCount">0</span>
+      </div>
+      <div class="activity-actions">
+        <button class="secondary" id="activityRunBtn" type="button">지금 확인</button>
+      </div>
+      <div class="activity-list" id="activityList"></div>
+    </section>
+
+    <footer class="footer-actions">
+      <button class="danger" id="clearAssignmentsBtn" type="button">티어 배정 초기화</button>
+    </footer>
+  </main>
+
+  <script src="js/platform.js"></script>
+  <script src="js/favoriteTierStore.js"></script>
+  <script src="sidebar.js"></script>
+</body>
+</html>

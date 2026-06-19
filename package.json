@@ -1,0 +1,30 @@
+{
+  "name": "chzzk-sidebar-shuffler",
+  "version": "1.5.4",
+  "private": true,
+  "description": "CHZZK following sidebar favorite, tier, and shuffle extension for Chrome and NAVER Whale.",
+  "scripts": {
+    "build:chrome": "node scripts/build.mjs chrome",
+    "build:whale": "node scripts/build.mjs whale",
+    "build:all": "node scripts/build.mjs all",
+    "qa:chromium:isolated": "node scripts/qa-chromium.mjs",
+    "qa:whale:isolated": "node scripts/qa-whale.mjs",
+    "qa:isolated": "npm run qa:chromium:isolated && npm run qa:whale:isolated",
+    "qa:main:readiness": "node scripts/check-main-browser-readiness.mjs",
+    "qa:main:required": "node scripts/check-main-browser-readiness.mjs --require-main",
+    "qa:main:whale:plan": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/Start-MainWhaleQa.ps1",
+    "qa:main:whale:start": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/Start-MainWhaleQa.ps1 -Apply",
+    "guard:completion": "node scripts/check-completion-guard.mjs",
+    "guard:completion:allow-main-unverified": "node scripts/check-completion-guard.mjs --allow-main-unverified",
+    "assets:store": "node scripts/generate-store-assets.mjs",
+    "validate": "node scripts/validate.mjs",
+    "sync:version": "node scripts/sync-version.mjs",
+    "version:patch": "node scripts/bump-version.mjs patch",
+    "version:minor": "node scripts/bump-version.mjs minor",
+    "version:major": "node scripts/bump-version.mjs major",
+    "version": "node scripts/sync-version.mjs && npm run validate"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

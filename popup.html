@@ -2,197 +2,501 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>Chzzk Sidebar Shuffler</title>
+  <title>Chzzk Tier Sort</title>
   <style>
+    :root {
+      --bg: #0a0f14;
+      --surface: #121a23;
+      --surface-raised: #17212c;
+      --text: #f2f7f4;
+      --muted: #98a5b2;
+      --faint: #74808c;
+      --border: #263340;
+      --border-strong: #354454;
+      --surface-sunken: #0d131a;
+      --primary: #00ffa3;
+      --primary-ink: #02110b;
+      --focus: #69ffd0;
+      --radius: 8px;
+      --radius-sm: 6px;
+      --control-h: 40px;
+      --control-icon: 16px;
+    }
+
     * {
+      box-sizing: border-box;
       margin: 0;
       padding: 0;
-      box-sizing: border-box;
     }
-    
+
+    html {
+      color-scheme: dark;
+      scrollbar-gutter: stable;
+    }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      width: 320px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: #333;
+      width: min(390px, 100vw);
+      max-width: 390px;
+      min-height: 420px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      letter-spacing: 0;
     }
-    
-    .container {
-      padding: 20px;
-      background: white;
-      border-radius: 12px;
-      margin: 0;
-      min-height: 100%;
+
+    .shell {
+      padding: 16px;
     }
-    
-    .header {
-      text-align: center;
-      margin-bottom: 24px;
+
+    .screen {
+      display: block;
     }
-    
-    .title {
-      font-size: 20px;
-      font-weight: 700;
-      color: #2d3748;
-      margin-bottom: 4px;
+
+    .screen.hidden {
+      display: none !important;
     }
-    
-    .subtitle {
-      font-size: 12px;
-      color: #718096;
+
+    .tier-screen {
+      min-height: 560px;
+      padding: 0;
     }
-    
-    .controls {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      margin-bottom: 24px;
+
+    .tier-top {
+      height: 48px;
+      display: grid;
+      grid-template-columns: 40px minmax(0, 1fr);
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
     }
-    
-    .toggle-item {
+
+    .back-button {
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--surface-raised);
+      color: var(--text);
+      display: inline-grid;
+      place-items: center;
+      cursor: pointer;
+    }
+
+    .tier-top-title {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .tier-top-title strong {
+      font-size: 13px;
+      line-height: 1.2;
+    }
+
+    .tier-top-title span {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tier-frame {
+      width: 100%;
+      height: 560px;
+      border: 0;
+      display: block;
+      background: var(--bg);
+    }
+
+    .top {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 16px;
-      background: #f7fafc;
-      border-radius: 8px;
-      border: 1px solid #e2e8f0;
-      transition: all 0.2s ease;
+      gap: 12px;
+      margin-bottom: 16px;
     }
-    
-    .toggle-item:hover {
-      background: #edf2f7;
-      border-color: #cbd5e0;
+
+    .title {
+      display: grid;
+      gap: 3px;
     }
-    
-    .toggle-label {
-      font-size: 14px;
-      font-weight: 500;
-      color: #4a5568;
+
+    h1 {
+      font-size: 17px;
+      line-height: 1.2;
+      font-weight: 800;
     }
-    
-    .toggle-switch {
-      position: relative;
-      width: 44px;
-      height: 24px;
-      background: #cbd5e0;
-      border-radius: 12px;
+
+    .sub {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .badge {
+      flex: 0 0 auto;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: #8df5bd;
+      font-size: 11px;
+      padding: 5px 8px;
+      background: var(--surface);
+      line-height: 1;
+    }
+
+    .status {
+      min-height: 34px;
+      margin-bottom: 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: #cbd5df;
+      padding: 9px 10px;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .section {
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+      margin-top: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .section.actions {
+      border-top: 0;
+      padding-top: 0;
+      margin-top: 0;
+    }
+
+    .section.settings {
+      gap: 8px;
+    }
+
+    .toggle {
+      min-height: 42px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 8px 10px;
       cursor: pointer;
-      transition: background 0.2s ease;
+      transition: border-color 0.15s ease, background 0.15s ease;
     }
-    
-    .toggle-switch.active {
-      background: #48bb78;
+
+    .toggle:hover {
+      border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
     }
-    
-    .toggle-slider {
+
+    .toggle strong {
+      display: block;
+      font-size: 13px;
+      line-height: 1.2;
+      margin-bottom: 3px;
+    }
+
+    .toggle span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.3;
+    }
+
+    .switch {
+      width: 46px;
+      height: 28px;
+      border: 0;
+      border-radius: 999px;
+      background: #394452;
+      cursor: pointer;
+      position: relative;
+      transition: background 0.15s ease;
+      display: block;
+      flex: 0 0 auto;
+    }
+
+    .switch::after {
+      content: "";
       position: absolute;
-      top: 2px;
-      left: 2px;
       width: 20px;
       height: 20px;
-      background: white;
-      border-radius: 10px;
-      transition: transform 0.2s ease;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      left: 4px;
+      top: 4px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform 0.15s ease;
     }
-    
-    .toggle-switch.active .toggle-slider {
-      transform: translateX(20px);
+
+    .switch[aria-checked="true"] {
+      background: var(--primary);
     }
-    
-    .action-button {
-      width: 100%;
-      padding: 12px 16px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
+
+    .switch[aria-checked="true"]::after {
+      transform: translateX(18px);
+      background: #06100c;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .actions.is-empty {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    button.command, a.command {
+      min-height: var(--control-h);
+      min-width: 0;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--surface-raised);
+      color: var(--text);
+      font-weight: 700;
+      font-size: 12px;
+      line-height: 1.1;
       cursor: pointer;
-      transition: all 0.2s ease;
-      margin-bottom: 12px;
-    }
-    
-    .action-button:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-    }
-    
-    .action-button:active {
-      transform: translateY(0);
-    }
-    
-    .support-button {
-      width: 100%;
-      padding: 10px 16px;
-      background: #ffd700;
-      color: #2d3748;
-      border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
       text-decoration: none;
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       text-align: center;
+      padding: 0 10px;
+      overflow: hidden;
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, white 3%, transparent);
     }
-    
-    .support-button:hover {
-      background: #ffed4e;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(255, 215, 0, 0.4);
+
+    .command[data-variant="quiet"] {
+      background: color-mix(in srgb, var(--surface-raised) 82%, var(--bg));
+      color: #d7e4dd;
     }
-    
+
+    .button-content {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-width: 0;
+      max-width: 100%;
+      white-space: nowrap;
+      line-height: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .icon-slot {
+      inline-size: var(--control-icon);
+      block-size: var(--control-icon);
+      flex: 0 0 var(--control-icon);
+      display: inline-grid;
+      place-items: center;
+      line-height: 0;
+    }
+
+    .icon-slot svg,
+    button.command svg,
+    a.command svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .command[aria-disabled="true"] {
+      opacity: 0.62;
+      cursor: not-allowed;
+    }
+
+    button.command.primary {
+      grid-column: 1 / -1;
+      color: #06100c;
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+
+    #openChzzkBtn:not(.hidden) {
+      grid-column: 1 / -1;
+      color: #06100c;
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+
+    button.command:disabled {
+      opacity: 0.62;
+      cursor: not-allowed;
+    }
+
+    body.is-working {
+      cursor: progress;
+    }
+
+    body.is-working .status {
+      border-color: color-mix(in srgb, var(--primary) 50%, var(--border));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 16%, transparent);
+    }
+
+    button:not(:disabled):hover {
+      border-color: color-mix(in srgb, var(--primary) 36%, var(--border-strong));
+    }
+
+    button:not(:disabled):active {
+      transform: translateY(1px);
+    }
+
+    button:focus-visible,
+    a:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
     .footer {
-      text-align: center;
-      margin-top: 16px;
-      padding-top: 16px;
-      border-top: 1px solid #e2e8f0;
-    }
-    
-    .version {
+      margin-top: 12px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--faint);
       font-size: 11px;
-      color: #a0aec0;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <div class="title">Chzzk Sidebar Shuffler</div>
-      <div class="subtitle">치지직 사이드바 관리</div>
-    </div>
-    
-    <div class="controls">
-      <div class="toggle-item">
-        <span class="toggle-label">시청자 수 숨기기</span>
-        <div class="toggle-switch" id="hideViewerToggle">
-          <div class="toggle-slider"></div>
-        </div>
+  <main class="shell screen" id="homeScreen">
+    <header class="top">
+      <div class="title">
+        <h1>치지직 티어 정렬</h1>
+        <p class="sub">즐겨찾기, 티어, 셔플을 빠르게 적용합니다.</p>
       </div>
-      
-      <div class="toggle-item">
-        <span class="toggle-label">자동 셔플 기능</span>
-        <div class="toggle-switch" id="enableShuffleToggle">
-          <div class="toggle-slider"></div>
+      <div class="badge" id="browserBadge">Chrome</div>
+    </header>
+
+    <div class="status" id="status" role="status" aria-live="polite">현재 치지직 탭을 확인하는 중입니다.</div>
+
+    <section class="section actions" aria-label="동작">
+      <button class="command" id="openChzzkBtn" type="button">
+        <span class="button-content">
+          <span class="icon-slot"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 17 17 7"></path><path d="M8 7h9v9"></path></svg></span>
+          치지직 열기
+        </span>
+      </button>
+      <button class="command primary" id="applyTierBtn" type="button">
+        <span class="button-content">
+          <span class="icon-slot"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"></path></svg></span>
+          정렬 적용
+        </span>
+      </button>
+      <button class="command" id="shuffleBtn" type="button">
+        <span class="button-content">
+          <span class="icon-slot"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M16 3h5v5"></path><path d="M4 20 21 3"></path><path d="M21 16v5h-5"></path><path d="M15 15 21 21"></path><path d="M4 4l5 5"></path></svg></span>
+          그룹 셔플
+        </span>
+      </button>
+      <button class="command" id="expandBtn" type="button">
+        <span class="button-content">
+          <span class="icon-slot"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg></span>
+          목록 펼치기
+        </span>
+      </button>
+      <button class="command" id="openManagerBtn" type="button" data-variant="quiet">
+        <span class="button-content">
+          <span class="icon-slot"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path></svg></span>
+          티어 관리
+        </span>
+      </button>
+      <button class="command" id="refreshBtn" type="button" data-variant="quiet">
+        <span class="button-content">
+          <span class="icon-slot"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 0 0-14.7-4.6L4 8"></path><path d="M4 4v4h4"></path><path d="M4 13a8.1 8.1 0 0 0 14.7 4.6L20 16"></path><path d="M20 20v-4h-4"></path></svg></span>
+          새로고침
+        </span>
+      </button>
+    </section>
+
+    <section class="section settings" aria-label="설정">
+      <div class="toggle">
+        <div>
+          <strong id="enableTierSortLabel">티어 우선 정렬</strong>
+          <span>S-D, 미분류 즐겨찾기, 일반 채널 순서로 정렬</span>
         </div>
+        <button class="switch" id="enableTierSortToggle" type="button" role="switch" aria-checked="true" aria-labelledby="enableTierSortLabel"></button>
       </div>
-    </div>
-    
-    <button class="action-button" id="shuffleBtn">🎲 채널 셔플 실행</button>
-    
-    <a href="https://aq.gy/f/Jf1nN" target="_blank" class="support-button">
-      ☕ 개발자에게 후원하기
-    </a>
-    
-    <div class="footer">
-      <div class="version">v1.2</div>
-    </div>
-  </div>
-  
+
+      <div class="toggle">
+        <div>
+          <strong id="hideViewerCountLabel">시청자 수 숨김</strong>
+          <span>사이드바와 라이브 카드의 숫자 노출을 줄입니다.</span>
+        </div>
+        <button class="switch" id="hideViewerCountToggle" type="button" role="switch" aria-checked="true" aria-labelledby="hideViewerCountLabel"></button>
+      </div>
+
+      <div class="toggle">
+        <div>
+          <strong id="enableStarLabel">즐겨찾기 버튼</strong>
+          <span>채널 옆 별표와 관리 화면을 사용합니다.</span>
+        </div>
+        <button class="switch" id="enableStarToggle" type="button" role="switch" aria-checked="true" aria-labelledby="enableStarLabel"></button>
+      </div>
+
+      <div class="toggle">
+        <div>
+          <strong id="enableAutoExpandLabel">LNB 자동 펼치기</strong>
+          <span>접힌 팔로잉 목록을 펼쳐 채널을 더 불러옵니다.</span>
+        </div>
+        <button class="switch" id="enableAutoExpandToggle" type="button" role="switch" aria-checked="true" aria-labelledby="enableAutoExpandLabel"></button>
+      </div>
+
+      <div class="toggle">
+        <div>
+          <strong id="enableShuffleLabel">자동 셔플</strong>
+          <span>페이지 로드 후 같은 그룹 안에서만 섞습니다.</span>
+        </div>
+        <button class="switch" id="enableShuffleToggle" type="button" role="switch" aria-checked="true" aria-labelledby="enableShuffleLabel"></button>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span id="versionText">v</span>
+      <a class="sub" href="https://aq.gy/f/Jf1nN" target="_blank" rel="noreferrer">후원</a>
+    </footer>
+  </main>
+
+  <main class="tier-screen screen hidden" id="tierScreen">
+    <header class="tier-top">
+      <button class="back-button" id="backToHomeBtn" type="button" aria-label="뒤로가기">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+      </button>
+      <div class="tier-top-title">
+        <strong>티어 관리</strong>
+        <span>즐겨찾기와 순서를 바로 조정합니다.</span>
+      </div>
+    </header>
+    <iframe class="tier-frame" id="tierFrame" title="티어 관리"></iframe>
+  </main>
+
+  <script src="js/platform.js"></script>
+  <script src="js/favoriteTierStore.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

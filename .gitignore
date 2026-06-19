@@ -7,3 +7,10 @@
 
 # VS Code settings
 .vscode/
+
+node_modules/
+dist/
+artifacts/
+*.zip
+.runtime/
+.tmp*
