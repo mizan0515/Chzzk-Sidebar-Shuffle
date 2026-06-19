@@ -138,6 +138,20 @@ async function chzzkSidebarOrder(client) {
   return evalIn(client, `Array.from(document.querySelectorAll('#codex-chzzk-test-sidebar li')).map(li => li.dataset.testId).join(',')`);
 }
 
+const fixtureHtml = '<ul class="navigation_bar_list__codex"><li data-test-id="alpha"><a href="/live/alpha"><span>Alpha Stream</span><span>라이브</span></a></li><li data-test-id="beta"><a href="/live/beta"><span>Beta Live</span><span>라이브</span></a></li><li data-test-id="gamma"><a href="/channel/gamma"><span>Gamma Offline</span></a></li><li data-test-id="delta"><a href="/live/delta"><span>Delta Live</span><span>라이브</span></a></li><li data-test-id="epsilon"><a href="/live/epsilon"><span>Epsilon Live</span><span>라이브</span></a></li><li data-test-id="zeta"><a href="/live/zeta"><span>Zeta Live</span><span>라이브</span></a></li><li data-test-id="eta"><a href="/live/eta"><span>Eta Live</span><span>라이브</span></a></li></ul>';
+
+function injectFixtureExpression() {
+  return `(() => {
+    document.querySelector('#codex-chzzk-test-sidebar')?.remove();
+    const host = document.createElement('aside');
+    host.id = 'codex-chzzk-test-sidebar';
+    host.style.cssText = 'position:fixed;left:0;top:0;z-index:2147483000;width:280px;background:#0d131a;padding:8px;';
+    host.innerHTML = ${JSON.stringify(fixtureHtml)};
+    document.body.prepend(host);
+    return true;
+  })()`;
+}
+
 async function waitForPageValue(client, label, expression, attempts = 40) {
   let last;
   for (let i = 0; i < attempts; i += 1) {
@@ -212,15 +226,8 @@ async function main() {
       marker: document.documentElement?.getAttribute('data-chzzk-star-observer') || '',
       version: document.getElementById('chzzk-star-styles')?.dataset.chzzkExtensionVersion || ''
     }))()`);
-    await evalIn(chzzk, `(() => {
-      document.querySelector('#codex-chzzk-test-sidebar')?.remove();
-      const host = document.createElement('aside');
-      host.id = 'codex-chzzk-test-sidebar';
-      host.style.cssText = 'position:fixed;left:0;top:0;z-index:2147483000;width:280px;background:#0d131a;padding:8px;';
-      host.innerHTML = '<ul class="navigation_bar_list__codex"><li data-test-id="alpha"><a href="/live/alpha"><span>Alpha Stream</span><span>라이브</span></a></li><li data-test-id="beta"><a href="/live/beta"><span>Beta Live</span><span>라이브</span></a></li><li data-test-id="gamma"><a href="/channel/gamma"><span>Gamma Offline</span></a></li></ul>';
-      document.body.prepend(host);
-      return true;
-    })()`);
+    await chzzk.send('Page.enable');
+    await evalIn(chzzk, injectFixtureExpression());
     await sleep(900);
     const before = await chzzkSidebarOrder(chzzk);
     const contentScriptVersion = await evalIn(chzzk, `document.getElementById('chzzk-star-styles')?.dataset.chzzkExtensionVersion || ''`);
@@ -245,7 +252,7 @@ async function main() {
         })
       };
     })()`);
-    if (starButtonInitial.count !== 3) {
+    if (starButtonInitial.count !== 7) {
       throw new Error(`Content star buttons were not injected for all test channels before click: ${JSON.stringify(starButtonInitial)}`);
     }
 
@@ -302,9 +309,13 @@ async function main() {
         version: 2,
         channels: {
           alpha: { id: 'alpha', name: 'Alpha Stream', href: '/live/alpha', avatarUrl: '', lastSeenAt: Date.now() },
-          beta: { id: 'beta', name: 'Beta Live', href: '/live/beta', avatarUrl: '', lastSeenAt: Date.now() }
+          beta: { id: 'beta', name: 'Beta Live', href: '/live/beta', avatarUrl: '', lastSeenAt: Date.now() },
+          delta: { id: 'delta', name: 'Delta Live', href: '/live/delta', avatarUrl: '', lastSeenAt: Date.now() },
+          epsilon: { id: 'epsilon', name: 'Epsilon Live', href: '/live/epsilon', avatarUrl: '', lastSeenAt: Date.now() },
+          zeta: { id: 'zeta', name: 'Zeta Live', href: '/live/zeta', avatarUrl: '', lastSeenAt: Date.now() },
+          eta: { id: 'eta', name: 'Eta Live', href: '/live/eta', avatarUrl: '', lastSeenAt: Date.now() }
         },
-        starred: ['alpha', 'beta'],
+        starred: ['alpha', 'beta', 'delta', 'epsilon', 'zeta', 'eta'],
         tiers: [
           { id: 's', label: 'S', color: '#ff6b6b', order: 0 },
           { id: 'a', label: 'A', color: '#ffd166', order: 1 },
@@ -312,8 +323,8 @@ async function main() {
           { id: 'c', label: 'C', color: '#73c2fb', order: 3 },
           { id: 'd', label: 'D', color: '#b8b8c7', order: 4 }
         ],
-        assignments: { beta: 's', alpha: 'a' },
-        tierOrder: { s: ['beta'], a: ['alpha'], b: [], c: [], d: [] }
+        assignments: { beta: 's', delta: 's', epsilon: 's', zeta: 's', eta: 's', alpha: 'a' },
+        tierOrder: { s: ['beta', 'delta', 'epsilon', 'zeta', 'eta'], a: ['alpha'], b: [], c: [], d: [] }
       }
     })`);
 
@@ -329,6 +340,35 @@ async function main() {
     })()`);
 
     const after = await chzzkSidebarOrder(chzzk);
+    await click(popup, 'shuffle within tiers', `(() => {
+      const element = document.getElementById('shuffleBtn');
+      const rect = element.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    })()`);
+    const afterGroupShuffle = await chzzkSidebarOrder(chzzk);
+    await chzzk.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `(() => {
+        const mount = () => {
+          if (!document.body || document.getElementById('codex-chzzk-test-sidebar')) return;
+          const host = document.createElement('aside');
+          host.id = 'codex-chzzk-test-sidebar';
+          host.style.cssText = 'position:fixed;left:0;top:0;z-index:2147483000;width:280px;background:#0d131a;padding:8px;';
+          host.innerHTML = ${JSON.stringify(fixtureHtml)};
+          document.body.prepend(host);
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true });
+        else mount();
+      })();`
+    });
+    await chzzk.send('Page.reload', { ignoreCache: true });
+    const afterReload = await waitForPageValue(chzzk, 'tier order after F5 reload', `(() => {
+      const order = Array.from(document.querySelectorAll('#codex-chzzk-test-sidebar li')).map(li => li.dataset.testId).join(',');
+      const parts = order.split(',').filter(Boolean);
+      const firstTier = parts.slice(0, 5).slice().sort().join(',');
+      return firstTier === 'beta,delta,epsilon,eta,zeta' && parts.slice(5).join(',') === 'alpha,gamma'
+        ? { ok: true, order }
+        : { pending: true, order, hasFixture: Boolean(document.getElementById('codex-chzzk-test-sidebar')), marker: document.documentElement?.getAttribute('data-chzzk-star-observer') || '' };
+    })()`, 60);
     const finalPopup = await evalIn(popup, `(() => ({
       status: document.getElementById('status')?.textContent,
       overflowX: document.documentElement.scrollWidth > innerWidth,
@@ -347,24 +387,57 @@ async function main() {
         };
       })
     }))()`);
+    await click(popup, 'open tier manager', `(() => {
+      const element = document.getElementById('openManagerBtn');
+      const rect = element.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    })()`);
+    await sleep(1200);
+    const tierScreen = await evalIn(popup, `(() => {
+      const screen = document.getElementById('tierScreen');
+      const frame = document.getElementById('tierFrame');
+      const frameDoc = frame?.contentDocument;
+      return {
+        visible: !!screen && !screen.classList.contains('hidden'),
+        homeHidden: document.getElementById('homeScreen')?.classList.contains('hidden') || false,
+        frameSrc: frame?.getAttribute('src') || '',
+        frameTitle: frame?.getAttribute('title') || '',
+        frameReady: !!frameDoc?.querySelector('.sidebar-shell'),
+        favoriteCount: frameDoc?.getElementById('favoriteCount')?.textContent || '',
+        hasBack: !!document.getElementById('backToHomeBtn'),
+        overflowX: document.documentElement.scrollWidth > innerWidth
+      };
+    })()`);
 
     const screenshot = await popup.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true }, 45000);
     writeFileSync(screenshotPath, Buffer.from(screenshot.data, 'base64'));
 
-    if (before !== 'alpha,beta,gamma') throw new Error(`Unexpected initial order: ${before}`);
+    if (before !== 'alpha,beta,gamma,delta,epsilon,zeta,eta') throw new Error(`Unexpected initial order: ${before}`);
     if (contentScriptVersion !== packageJson.version) {
       throw new Error(`Content script version marker mismatch: ${contentScriptVersion || '(missing)'} !== ${packageJson.version}`);
     }
     if (starButtonInitial.boxes.some(box => box.width < 32 || box.height < 32 || Math.abs(box.centerDeltaX) > 1 || Math.abs(box.centerDeltaY) > 1)) {
       throw new Error(`Content star icons are not centered in their controls: ${JSON.stringify(starButtonInitial)}`);
     }
-    if (afterContentStarAdd.pressed !== 'true' || !afterContentStarAdd.active || afterContentStarAdd.order.split(',').filter(Boolean).length !== 3) {
+    if (afterContentStarAdd.pressed !== 'true' || !afterContentStarAdd.active || afterContentStarAdd.order.split(',').filter(Boolean).length !== 7) {
       throw new Error(`Content star add did not persist or preserve LNB channels: ${JSON.stringify(afterContentStarAdd)}`);
     }
-    if (afterContentStarRemove.pressed !== 'false' || afterContentStarRemove.active || afterContentStarRemove.order.split(',').filter(Boolean).length !== 3) {
+    if (afterContentStarRemove.pressed !== 'false' || afterContentStarRemove.active || afterContentStarRemove.order.split(',').filter(Boolean).length !== 7) {
       throw new Error(`Content star remove did not persist or preserve LNB channels: ${JSON.stringify(afterContentStarRemove)}`);
     }
-    if (after !== 'beta,alpha,gamma') throw new Error(`Tier sort did not apply. Final order: ${after}`);
+    if (after !== 'beta,delta,epsilon,zeta,eta,alpha,gamma') throw new Error(`Tier sort did not apply. Final order: ${after}`);
+    const shuffledParts = afterGroupShuffle.split(',').filter(Boolean);
+    const shuffledS = shuffledParts.slice(0, 5);
+    if (
+      afterGroupShuffle === after ||
+      shuffledParts.slice(5).join(',') !== 'alpha,gamma' ||
+      shuffledS.slice().sort().join(',') !== 'beta,delta,epsilon,eta,zeta'
+    ) {
+      throw new Error(`Group shuffle should change order only within the S tier and keep tier boundaries. Final order: ${afterGroupShuffle}`);
+    }
+    if (!tierScreen.visible || !tierScreen.homeHidden || !tierScreen.frameReady || tierScreen.frameTitle !== '티어 관리' || tierScreen.overflowX) {
+      throw new Error(`Chrome tier manager did not open as an in-popup usable screen: ${JSON.stringify(tierScreen)}`);
+    }
     if (initial.iconSlotMetrics.length < 5 || initial.iconSlotMetrics.some(metric => metric.width !== 16 || metric.height !== 16 || metric.iconWidth !== 16 || metric.iconHeight !== 16 || Math.abs(metric.centerDeltaX) > 1 || Math.abs(metric.centerDeltaY) > 1)) {
       throw new Error(`Popup action icons are not centered before interaction: ${JSON.stringify(initial)}`);
     }
@@ -383,12 +456,15 @@ async function main() {
       observerReady,
       before,
       after,
+      afterGroupShuffle,
+      afterReload,
       starButtonInitial,
       contentStarInteractions: {
         afterContentStarAdd,
         afterContentStarRemove
       },
       initial,
+      tierScreen,
       finalPopup,
       screenshotPath
     }, null, 2));

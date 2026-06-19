@@ -914,6 +914,14 @@
       } else {
         window.ChzzkLogger?.warn('⚠️ Following page: No initial channels found');
         ensureStarObservation(document);
+        setupChangeObserver();
+        setTimeout(() => {
+          const currentList = window.ChzzkShuffle?.findChannelsList?.();
+          if (currentList?.list && currentList?.items?.length) {
+            applyInitialChannelOrdering(currentList.list, currentList.items, 'following:late-list-retry');
+            ensureStarObservation(currentList.list);
+          }
+        }, 1000);
       }
     }, 8000); // 초기 로딩은 8초만 대기 (점진적이므로 더 짧게)
   }
@@ -1389,6 +1397,10 @@
         clearTimeout(updateTimeout);
         updateTimeout = setTimeout(() => {
           window.ChzzkViewerCount.scheduleUpdate();
+          const currentList = window.ChzzkShuffle?.findChannelsList?.();
+          if (currentList?.list && currentList?.items?.length) {
+            applyInitialChannelOrdering(currentList.list, currentList.items, 'mutation:new-channel-content');
+          }
           // 새 채널 콘텐츠 감지 시 별표 버튼 재주입
           if (window.ChzzkStar && window.ChzzkSettings?.get('enableStar')) {
             setTimeout(() => window.ChzzkStar.injectAllStarButtons(), 200);
@@ -1824,7 +1836,7 @@
               const state = await window.ChzzkFavoriteTierStore.load();
               window.ChzzkStar?.syncFromTierState?.(state);
             }
-            const applied = window.ChzzkShuffle?.applyTierSort?.({ shuffleWithinTiers: false }) || false;
+            const applied = window.ChzzkShuffle?.applyTierSort?.({ shuffleWithinTiers: false, pinChannelId: message?.pinChannelId || '' }) || false;
             if (window.ChzzkStar && window.ChzzkSettings?.get('enableStar')) {
               setTimeout(() => window.ChzzkStar.injectAllStarButtons(), 150);
             }

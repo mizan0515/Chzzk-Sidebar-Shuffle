@@ -584,10 +584,12 @@ class StarManager {
         window.ChzzkLogger?.info(`[STAR] Channel ${channelId} ${nowStarred ? 'starred' : 'unstarred'}`);
 
         // 즐겨찾기 상태 변경 후 즉시 위치 재정렬
+        const sortOptions = { shuffleWithinTiers: false, reason: 'star-toggle' };
+        if (nowStarred) sortOptions.pinChannelId = channelId;
         if (window.applyChzzkTierSort) {
-          await window.applyChzzkTierSort({ shuffleWithinTiers: false, reason: 'star-toggle' });
+          await window.applyChzzkTierSort(sortOptions);
         } else if (window.ChzzkShuffle && typeof window.ChzzkShuffle.applyTierSort === 'function') {
-          window.ChzzkShuffle.applyTierSort({ shuffleWithinTiers: false, reason: 'star-toggle' });
+          window.ChzzkShuffle.applyTierSort(sortOptions);
         } else if (window.ChzzkShuffle && typeof window.ChzzkShuffle.reorderByStarState === 'function') {
           window.ChzzkShuffle.reorderByStarState();
         }

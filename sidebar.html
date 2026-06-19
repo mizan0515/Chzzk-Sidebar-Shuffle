@@ -104,6 +104,17 @@
         <h2>활동 추적</h2>
         <span id="activityCount">0</span>
       </div>
+      <form class="activity-form" id="activityForm" aria-label="활동 추적 채널 추가">
+        <label>
+          <span>이름</span>
+          <input id="activityNameInput" type="text" autocomplete="off" placeholder="스트리머 이름">
+        </label>
+        <label>
+          <span>채널</span>
+          <input id="activityChannelInput" type="text" autocomplete="off" placeholder="치지직 live 주소 또는 채널 ID">
+        </label>
+        <button class="secondary" id="activityAddBtn" type="submit">추적 추가</button>
+      </form>
       <div class="activity-actions">
         <button class="secondary" id="activityRunBtn" type="button">지금 확인</button>
       </div>

@@ -32,6 +32,9 @@ const els = {
   channelCount: document.getElementById('channelCount'),
   clearAssignmentsBtn: document.getElementById('clearAssignmentsBtn'),
   activityRunBtn: document.getElementById('activityRunBtn'),
+  activityForm: document.getElementById('activityForm'),
+  activityNameInput: document.getElementById('activityNameInput'),
+  activityChannelInput: document.getElementById('activityChannelInput'),
   activityList: document.getElementById('activityList'),
   activityCount: document.getElementById('activityCount')
 };
@@ -98,6 +101,26 @@ function bindEvents() {
     els.connectionText.textContent = '활동 확인을 완료하지 못했습니다.';
     renderActivity();
   }));
+  els.activityForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = {
+      name: els.activityNameInput?.value?.trim() || '',
+      channel: els.activityChannelInput?.value?.trim() || ''
+    };
+    await runExclusive('추적 채널을 추가하는 중입니다.', async () => {
+      const response = await platform.sendRuntimeMessage?.({ type: 'ACTIVITY_ADD_STREAMER', input }).catch(error => ({ ok: false, error: error.message || String(error) }));
+      if (!response?.ok) {
+        els.connectionText.textContent = response?.error || '추적 채널을 추가하지 못했습니다.';
+        return false;
+      }
+      els.activityNameInput.value = '';
+      els.activityChannelInput.value = '';
+      await loadActivityState();
+      els.connectionText.textContent = '활동 추적 채널을 추가했습니다.';
+      render();
+      return true;
+    });
+  });
 }
 
 async function runExclusive(message, task) {
@@ -282,13 +305,13 @@ async function applySort(shuffleWithinTiers) {
   return !!response?.ok;
 }
 
-async function applySortQuietly(successMessage) {
+async function applySortQuietly(successMessage, options = {}) {
   if (!chzzkTab || lastDetectedCount === 0) {
     els.connectionText.textContent = successMessage;
     return false;
   }
 
-  const response = await sendToTab({ type: 'APPLY_TIER_SORT' });
+  const response = await sendToTab({ type: 'APPLY_TIER_SORT', ...options });
   els.connectionText.textContent = response?.ok ? '저장하고 현재 탭에 반영했습니다.' : successMessage;
   return !!response?.ok;
 }
@@ -472,7 +495,10 @@ function createCard(channel, tierId, draggable, action = 'remove') {
   card.querySelector('.mini').addEventListener('click', async () => {
     await runExclusive(action === 'add' ? '즐겨찾기에 추가하는 중입니다.' : '즐겨찾기에서 제거하는 중입니다.', async () => {
       await store.setStarred(channel.id, action === 'add', channel);
-      await applySortQuietly(action === 'add' ? '즐겨찾기에 추가했습니다.' : '즐겨찾기에서 제거했습니다.');
+      await applySortQuietly(
+        action === 'add' ? '즐겨찾기에 추가했습니다.' : '즐겨찾기에서 제거했습니다.',
+        action === 'add' ? { pinChannelId: channel.id } : {}
+      );
       render();
       focusChannelMini(channel.id, action === 'add' ? '.unassigned' : '.all-channels');
     });
@@ -597,12 +623,32 @@ function cardMetaText(channel, tierId, action) {
 function renderActivity() {
   if (!els.activityList || !els.activityCount) return;
   const events = activityState.events || [];
-  els.activityCount.textContent = String((activityState.streamers || []).length);
+  const streamers = activityState.streamers || [];
+  els.activityCount.textContent = String(streamers.length);
   els.activityList.textContent = '';
-  if (!events.length) {
-    els.activityList.appendChild(emptyNode((activityState.streamers || []).length ? '아직 새 활동 없음' : '추적 채널 없음'));
+  if (!streamers.length && !events.length) {
+    els.activityList.appendChild(emptyNode('추적 채널 없음'));
     return;
   }
+  streamers.forEach((streamer) => {
+    const liveState = activityState.states?.[streamer.channelId] || {};
+    const item = document.createElement('div');
+    item.className = 'activity-item streamer-activity-row';
+    item.dataset.channelId = streamer.channelId || '';
+    item.innerHTML = `
+      <div class="activity-copy">
+        <strong>${escapeText(streamer.name || liveState.channelName || streamer.channelId || '스트리머')}</strong>
+        <span>${escapeText(streamer.channelId ? (liveState.isLive ? '방송 중' : '방송 꺼짐') : '채널 없음')}</span>
+      </div>
+      <div class="activity-row-actions">
+        <button class="tiny" type="button" data-activity-toggle="${escapeAttr(streamer.id || streamer.channelId)}" aria-pressed="${streamer.enabled !== false}">${streamer.enabled === false ? '켜기' : '끄기'}</button>
+        <button class="tiny danger-text" type="button" data-activity-remove="${escapeAttr(streamer.id || streamer.channelId)}">삭제</button>
+      </div>
+    `;
+    item.querySelector('[data-activity-toggle]')?.addEventListener('click', () => updateActivityStreamer(streamer.id || streamer.channelId, streamer.enabled === false));
+    item.querySelector('[data-activity-remove]')?.addEventListener('click', () => removeActivityStreamer(streamer.id || streamer.channelId));
+    els.activityList.appendChild(item);
+  });
   events.slice(0, 5).forEach((event) => {
     const item = document.createElement('a');
     item.className = 'activity-item';
@@ -614,6 +660,32 @@ function renderActivity() {
       <span>${escapeText(event.message || event.createdAt || '')}</span>
     `;
     els.activityList.appendChild(item);
+  });
+}
+
+async function updateActivityStreamer(id, enabled) {
+  await runExclusive('추적 상태를 저장하는 중입니다.', async () => {
+    const response = await platform.sendRuntimeMessage?.({ type: 'ACTIVITY_TOGGLE_STREAMER', id, enabled }).catch(error => ({ ok: false, error: error.message || String(error) }));
+    if (!response?.ok) {
+      els.connectionText.textContent = '추적 상태를 저장하지 못했습니다.';
+      return false;
+    }
+    await loadActivityState();
+    render();
+    return true;
+  });
+}
+
+async function removeActivityStreamer(id) {
+  await runExclusive('추적 채널을 삭제하는 중입니다.', async () => {
+    const response = await platform.sendRuntimeMessage?.({ type: 'ACTIVITY_REMOVE_STREAMER', id }).catch(error => ({ ok: false, error: error.message || String(error) }));
+    if (!response?.ok) {
+      els.connectionText.textContent = '추적 채널을 삭제하지 못했습니다.';
+      return false;
+    }
+    await loadActivityState();
+    render();
+    return true;
   });
 }
 

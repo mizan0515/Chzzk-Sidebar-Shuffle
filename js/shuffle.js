@@ -992,6 +992,7 @@ class ShuffleManager {
     const state = store?.state;
     const starManager = window.ChzzkStar;
     const shuffleWithinTiers = !!options.shuffleWithinTiers;
+    const pinChannelId = options.pinChannelId || '';
 
     try {
       let { list } = this.findChannelsList();
@@ -1025,15 +1026,24 @@ class ShuffleManager {
       });
       this.rememberBaselineOrder(containers);
 
-      const byTier = [];
-      (state?.tiers || []).slice().sort((a, b) => a.order - b.order).forEach((tier) => {
-        byTier.push(containers.filter(item => item.isStarred && item.tierId === tier.id));
+      const pinned = [];
+      const eligibleContainers = containers.filter((item) => {
+        if (pinChannelId && item.id === pinChannelId && item.isStarred) {
+          pinned.push(item);
+          return false;
+        }
+        return true;
       });
 
-      const unclassifiedStarred = containers.filter(item => item.isStarred && !item.tierId);
-      const liveGeneral = containers.filter(item => !item.isStarred && item.isLive);
-      const offlineGeneral = containers.filter(item => !item.isStarred && !item.isLive);
-      const groups = [...byTier, unclassifiedStarred, liveGeneral, offlineGeneral];
+      const byTier = [];
+      (state?.tiers || []).slice().sort((a, b) => a.order - b.order).forEach((tier) => {
+        byTier.push(eligibleContainers.filter(item => item.isStarred && item.tierId === tier.id));
+      });
+
+      const unclassifiedStarred = eligibleContainers.filter(item => item.isStarred && !item.tierId);
+      const liveGeneral = eligibleContainers.filter(item => !item.isStarred && item.isLive);
+      const offlineGeneral = eligibleContainers.filter(item => !item.isStarred && !item.isLive);
+      const groups = [pinned, ...byTier, unclassifiedStarred, liveGeneral, offlineGeneral].filter(group => group.length);
 
       groups.forEach((group) => {
         group.sort((a, b) => {

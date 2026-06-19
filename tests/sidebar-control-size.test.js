@@ -4,6 +4,7 @@ const { join } = require('node:path');
 
 const sidebarCss = readFileSync(join(__dirname, '..', 'sidebar.css'), 'utf8');
 const sidebarJs = readFileSync(join(__dirname, '..', 'sidebar.js'), 'utf8');
+const sidebarHtml = readFileSync(join(__dirname, '..', 'sidebar.html'), 'utf8');
 
 assert.match(
   sidebarCss,
@@ -147,6 +148,18 @@ assert.match(
   sidebarJs,
   /즐겨찾기 채널을 먼저 추가해 주세요/,
   'Sidebar disabled sort buttons should explain the missing favorite requirement'
+);
+
+assert.match(
+  sidebarHtml,
+  /id="activityForm"[\s\S]*id="activityNameInput"[\s\S]*id="activityChannelInput"[\s\S]*id="activityAddBtn"/,
+  'Sidebar activity tracker needs an in-extension add form instead of relying on the old standalone popup'
+);
+
+assert.match(
+  sidebarJs,
+  /ACTIVITY_ADD_STREAMER[\s\S]*ACTIVITY_TOGGLE_STREAMER[\s\S]*ACTIVITY_REMOVE_STREAMER/,
+  'Sidebar activity tracker should add, toggle, and remove tracked streamers through prefixed background messages'
 );
 
 console.log('sidebar control size regression passed');

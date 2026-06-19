@@ -61,6 +61,7 @@ async function sidebarMetrics(whale, pageId) {
     destructiveMiniText: Array.from(document.querySelectorAll('.mini.is-starred')).some(button => button.textContent.includes('×') || button.textContent.includes('X')),
     availableChannelIds: Array.from(document.querySelectorAll('#channelList .streamer-card')).map(card => card.dataset.channelId),
     unassignedIds: Array.from(document.querySelectorAll('#unassignedList .streamer-card')).map(card => card.dataset.channelId),
+    sTierIds: Array.from(document.querySelectorAll('.drop-zone[data-tier-id="s"] .streamer-card')).map(card => card.dataset.channelId),
     bTierIds: Array.from(document.querySelectorAll('.drop-zone[data-tier-id="b"] .streamer-card')).map(card => card.dataset.channelId),
     gammaPressed: document.querySelector('[data-channel-id="gamma"] .mini')?.getAttribute('aria-pressed') || null,
     gammaTierPressed: Array.from(document.querySelectorAll('[data-channel-id="gamma"] [data-tier-choice]')).filter(button => button.getAttribute('aria-pressed') === 'true').map(button => button.dataset.tierChoice || 'unassigned'),
@@ -190,8 +191,8 @@ async function main() {
           { id: 'c', label: 'C', color: '#73c2fb', order: 3 },
           { id: 'd', label: 'D', color: '#b8b8c7', order: 4 }
         ],
-        assignments: { beta: 's', alpha: 'a' },
-        tierOrder: { s: ['beta'], a: ['alpha'], b: [], c: [], d: [] }
+        assignments: { beta: 's', alpha: 's' },
+        tierOrder: { s: ['beta', 'alpha'], a: [], b: [], c: [], d: [] }
       }
     })`, { port });
 
@@ -274,6 +275,25 @@ async function main() {
     }))()`, { port });
     const metrics = await sidebarMetrics(whale, sidebarPage.id);
 
+    const dndResult = await whale.evaluate(sidebarPage.id, `(async () => {
+      const zone = document.querySelector('.drop-zone[data-tier-id="s"]');
+      const alpha = zone?.querySelector('[data-channel-id="alpha"]');
+      const beta = zone?.querySelector('[data-channel-id="beta"]');
+      if (!zone || !alpha || !beta) return { ok: false, reason: 'missing-cards' };
+      alpha.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true }));
+      const rect = beta.getBoundingClientRect();
+      beta.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientY: rect.top + 1 }));
+      beta.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, clientY: rect.top + 1 }));
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      const state = await chrome.storage.local.get('chzzkFavoriteTierState');
+      return {
+        ok: true,
+        sTierIds: Array.from(document.querySelectorAll('.drop-zone[data-tier-id="s"] .streamer-card')).map(card => card.dataset.channelId),
+        storedOrder: state.chzzkFavoriteTierState?.tierOrder?.s || []
+      };
+    })()`, { port });
+    const orderAfterSameTierDnd = await chzzkSidebarOrder(whale, chzzkPage.id);
+
     await clickElementCenter(whale, sidebarPage.id, `(() => {
       const element = document.querySelector('#channelList [data-channel-id="gamma"] .mini');
       element?.scrollIntoView({ block: 'center', inline: 'nearest' });
@@ -308,6 +328,12 @@ async function main() {
       throw new Error(`Content script version marker mismatch: ${contentScriptVersion || '(missing)'} !== ${packageJson.version}. Debug: ${JSON.stringify({ metrics, chzzkDebug, injectionDebug })}`);
     }
     if (after !== 'beta,alpha,gamma') throw new Error(`Tier sort did not apply. Final order: ${after}. Debug: ${JSON.stringify({ metrics, chzzkDebug, injectionDebug })}`);
+    if (!dndResult.ok || dndResult.storedOrder.join(',') !== 'alpha,beta' || dndResult.sTierIds.join(',') !== 'alpha,beta') {
+      throw new Error(`Same-tier DnD did not persist the requested S tier order: ${JSON.stringify({ dndResult, metrics, chzzkDebug, injectionDebug })}`);
+    }
+    if (orderAfterSameTierDnd !== 'alpha,beta,gamma') {
+      throw new Error(`Same-tier DnD order did not apply to the CHZZK page: ${JSON.stringify({ orderAfterSameTierDnd, dndResult, metrics, chzzkDebug, injectionDebug })}`);
+    }
     if (metrics.overflowX || metrics.buttonOverflow.length) throw new Error(`Whale layout overflow: ${JSON.stringify({ metrics, chzzkDebug, injectionDebug })}`);
     if (metrics.iconSlotMetrics.length < 2 || metrics.iconSlotMetrics.some(metric => metric.width !== 16 || metric.height !== 16 || metric.iconWidth !== 16 || metric.iconHeight !== 16 || Math.abs(metric.centerDeltaX) > 1 || Math.abs(metric.centerDeltaY) > 1)) {
       throw new Error(`Whale sidebar action icons are not centered in their slots: ${JSON.stringify({ metrics, chzzkDebug, injectionDebug })}`);
@@ -349,6 +375,9 @@ async function main() {
     if (afterAddFavorite.favoriteCount !== '3' || afterAddFavorite.availableChannelIds.length !== 0 || afterAddFavorite.unassignedIds.join(',') !== 'gamma') {
       throw new Error(`Sidebar favorite add button did not move gamma into unassigned favorites: ${JSON.stringify({ afterAddFavorite, metrics, chzzkDebug, injectionDebug })}`);
     }
+    if (!orderAfterAddFavorite.startsWith('gamma,')) {
+      throw new Error(`Adding a favorite should move that channel to the top immediately. order=${orderAfterAddFavorite}; evidence=${JSON.stringify({ afterAddFavorite, metrics, chzzkDebug, injectionDebug })}`);
+    }
     if (orderAfterAddFavorite.split(',').filter(Boolean).length !== 3) {
       throw new Error(`CHZZK sidebar lost channels after adding a favorite: ${JSON.stringify({ orderAfterAddFavorite, afterAddFavorite, metrics, chzzkDebug, injectionDebug })}`);
     }
@@ -382,6 +411,8 @@ async function main() {
         afterSearchClear
       },
       interactionMetrics: {
+        dndResult,
+        orderAfterSameTierDnd,
         afterAddFavorite,
         afterAssignTier,
         afterRemoveFavorite,
