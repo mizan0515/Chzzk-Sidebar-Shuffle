@@ -444,7 +444,7 @@ class ShuffleManager {
         this.findChannelsList();
 
       const list = foundList;
-      const allChannelItems = providedItems || this.findChannelItems(list || document);
+      const allChannelItems = providedItems || (list ? this.getSortableChannelItems(list) : this.findChannelItems(document));
 
       window.ChzzkLogger?.info(`🎯 [SHUFFLE] Parameters: list=${!!list}, items=${allChannelItems?.length || 0}, mutationLock=${this.mutationLock}`);
 
@@ -769,7 +769,7 @@ class ShuffleManager {
       window.ChzzkLogger?.shuffle(`🔄 Progressive shuffle: adding ${newChannels.length} new channels`);
 
       // 현재 DOM에 있는 모든 채널 가져오기
-      const currentChannels = this.findChannelItems(list);
+      const currentChannels = this.getSortableChannelItems(list);
       const channelContainers = this.prepareContainers(currentChannels);
 
       // 라이브/오프라인 분리
@@ -888,7 +888,7 @@ class ShuffleManager {
       const { list } = this.findChannelsList();
       if (!list) return;
 
-      const allChannelItems = this.findChannelItems(list);
+      const allChannelItems = this.getSortableChannelItems(list);
       if (allChannelItems.length === 0) return;
 
       const channelContainers = this.prepareContainers(allChannelItems);
@@ -941,11 +941,12 @@ class ShuffleManager {
   getChannelSnapshot() {
     try {
       const { list } = this.findChannelsList();
-      let items = this.findChannelItems(list || document);
+      let items = list ? this.getSortableChannelItems(list) : this.findChannelItems(document);
 
       if (!items.length && window.ChzzkDom?.findChannelsList) {
         const fallback = window.ChzzkDom.findChannelsList(document);
-        items = fallback.items || [];
+        items = fallback.list ? this.getSortableChannelItems(fallback.list) : (fallback.items || []);
+        if (!items.length) items = fallback.items || [];
       }
 
       const seen = new Set();
@@ -998,11 +999,12 @@ class ShuffleManager {
       let { list } = this.findChannelsList();
       if (!list) return false;
 
-      let items = this.findChannelItems(list);
+      let items = this.getSortableChannelItems(list);
       if (!items.length && window.ChzzkDom?.findChannelsList) {
         const fallback = window.ChzzkDom.findChannelsList(document);
         list = fallback.list;
-        items = fallback.items || [];
+        items = fallback.list ? this.getSortableChannelItems(fallback.list) : (fallback.items || []);
+        if (!items.length) items = fallback.items || [];
       }
       if (!items.length) return false;
 
@@ -1164,7 +1166,7 @@ class ShuffleManager {
         return null;
       }
 
-      const currentChannels = this.findChannelItems(list);
+      const currentChannels = this.getSortableChannelItems(list);
       if (currentChannels.length === 0) {
         window.ChzzkLogger?.warn('⚠️ [STATE] No channels found for state capture');
         return null;
@@ -1222,7 +1224,7 @@ class ShuffleManager {
         return false;
       }
 
-      const currentChannels = this.findChannelItems(list);
+      const currentChannels = this.getSortableChannelItems(list);
       if (currentChannels.length === 0) {
         window.ChzzkLogger?.warn('⚠️ [STATE] No current channels found for state restoration');
         return false;
@@ -1278,6 +1280,11 @@ class ShuffleManager {
           matchedCount++;
         }
       });
+
+      if (matchedCount < state.channelOrder.length) {
+        window.ChzzkLogger?.warn(`⚠️ [STATE] Restore skipped: only ${matchedCount}/${state.channelOrder.length} saved channels matched`);
+        return false;
+      }
 
       // 매칭되지 않은 새 채널들은 끝에 추가
       channelMap.forEach(unmatchedChannel => {
@@ -1529,6 +1536,21 @@ class ShuffleManager {
     return Array.from(list.children).filter(child =>
       !!child.querySelector?.('a[href*="/live/"], a[href*="/channel/"]')
     );
+  }
+
+  /**
+   * DOM 재정렬에 안전한 채널 항목만 반환한다.
+   * CHZZK 내부 마크업이 바뀌어 nested navigator/card 요소가 먼저 잡히면
+   * canSafelyReorder()가 직접 자식 수 불일치로 정렬을 거부한다. 실제 이동
+   * 단위는 항상 리스트의 직접 자식 li여야 한다.
+   * @private
+   * @param {Element} list
+   * @returns {Array<Element>}
+   */
+  getSortableChannelItems(list) {
+    const directChildren = this.getDirectChannelChildren(list);
+    if (directChildren.length > 0) return directChildren;
+    return this.findChannelItems(list || document);
   }
 
   /**

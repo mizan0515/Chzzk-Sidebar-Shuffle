@@ -55,6 +55,16 @@ class FakeElement {
     });
     return result;
   }
+
+  closest(selector) {
+    if (selector !== 'li') return null;
+    let current = this;
+    while (current) {
+      if (current.tagName === 'LI') return current;
+      current = current.parentElement;
+    }
+    return null;
+  }
 }
 
 class FakeFragment {
@@ -198,10 +208,52 @@ assert.equal(shuffle.restoreShuffleState(restoreState), true);
 assert.deepEqual(list.children, [header, alpha, beta, gamma]);
 
 const beforeUnsafeRestore = [...list.children];
-shuffle.findChannelsList = () => ({ list, items: [alpha, beta] });
+const incompleteList = new FakeElement('ul', '_list_incomplete');
+body.appendChild(incompleteList);
+const incompleteHeader = incompleteList.appendChild(new FakeElement('li', '_header'));
+const incompleteAlpha = incompleteList.appendChild(channelLi('alpha'));
+const incompleteBeta = incompleteList.appendChild(channelLi('beta'));
+shuffle.findChannelsList = () => ({ list: incompleteList, items: [incompleteAlpha, incompleteBeta] });
 shuffle.findChannelItems = () => [alpha, beta];
 assert.equal(shuffle.restoreShuffleState(restoreState), false);
 assert.deepEqual(list.children, beforeUnsafeRestore);
 assert.equal(list.children.length, 4);
+assert.deepEqual(incompleteList.children, [incompleteHeader, incompleteAlpha, incompleteBeta]);
+
+const directList = new FakeElement('ul', '_list_direct');
+body.appendChild(directList);
+const directHeader = directList.appendChild(new FakeElement('li', '_header'));
+const directAlpha = directList.appendChild(channelLi('direct-alpha'));
+const directBeta = directList.appendChild(channelLi('direct-beta'));
+const directGamma = directList.appendChild(channelLi('direct-gamma'));
+const nestedAnchors = [directAlpha, directBeta, directGamma].map(item => item.querySelector('a[href*="/live/"], a[href*="/channel/"]'));
+
+global.window.ChzzkPlatform = null;
+global.window.ChzzkFavoriteTierStore = {
+  state: {
+    starred: ['direct-gamma'],
+    tiers: [],
+    assignments: {},
+    tierOrder: {}
+  }
+};
+global.window.ChzzkStar = {
+  isStarred: id => id === 'direct-gamma',
+  extractChannelId: element => {
+    const link = element.querySelector?.('a[href*="/live/"], a[href*="/channel/"]') || (element.tagName === 'A' ? element : null);
+    return link?.href?.split('/').pop() || '';
+  }
+};
+global.window.ChzzkDom = {
+  extractChannel: element => {
+    const link = element.querySelector?.('a[href*="/live/"], a[href*="/channel/"]') || (element.tagName === 'A' ? element : null);
+    const id = link?.href?.split('/').pop() || '';
+    return id ? { id } : null;
+  }
+};
+shuffle.findChannelsList = () => ({ list: directList, items: nestedAnchors });
+shuffle.findChannelItems = () => nestedAnchors;
+assert.equal(shuffle.applyTierSort({ shuffleWithinTiers: false }), true);
+assert.deepEqual(directList.children, [directHeader, directGamma, directAlpha, directBeta]);
 
 console.log('lnb reorder guard passed');

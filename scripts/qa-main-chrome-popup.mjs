@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.env.CHZZK_MAIN_CHROME_PORT || 9222);
 const screenshotPath = join(root, 'artifacts', 'main-chrome-popup-action.png');
+let popupOpened = false;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -14,6 +15,14 @@ async function json(path) {
   const response = await fetch(`http://127.0.0.1:${port}${path}`);
   if (!response.ok) throw new Error(`CDP HTTP ${path} failed: ${response.status}`);
   return response.json();
+}
+
+async function requireCdpReady() {
+  const version = await json('/json/version');
+  if (!version?.webSocketDebuggerUrl && !version?.Browser) {
+    throw new Error('CDP /json/version did not expose a Chrome debugger endpoint');
+  }
+  return version;
 }
 
 function makeClient(target) {
@@ -97,7 +106,7 @@ async function findExtensionWorker() {
     await client.ready;
     await client.send('Runtime.enable');
     const manifest = await evaluate(client, 'chrome.runtime.getManifest()').catch(() => null);
-    if (['CHZZK Favorite Tiers', 'Chzzk Sidebar Shuffler'].includes(manifest?.name)) {
+    if (['CHZZK Favorites & Tiers', 'CHZZK Favorite Tiers', 'Chzzk Sidebar Shuffler'].includes(manifest?.name)) {
       const extensionId = target.url.match(/^chrome-extension:\/\/([^/]+)/)?.[1] || '';
       return { worker: target, client, extensionId, manifest };
     }
@@ -107,6 +116,7 @@ async function findExtensionWorker() {
 }
 
 async function main() {
+  const cdpVersion = await requireCdpReady();
   const { client: workerClient, extensionId, manifest } = await findExtensionWorker();
   const bringToFront = await bringContentPageToFront();
   const openResult = await evaluate(workerClient, `new Promise(resolve => {
@@ -126,6 +136,7 @@ async function main() {
   if (!openResult?.ok) {
     throw new Error(`Real extension action popup did not open: ${openResult?.lastError || openResult?.error || 'unknown error'}`);
   }
+  popupOpened = true;
   const popupTarget = await waitForPopup(extensionId);
 
   const popupClient = makeClient(popupTarget);
@@ -170,6 +181,7 @@ async function main() {
     status: blankOrTall ? 'FAIL' : 'PASS',
     route: 'main-chrome-action-popup-cdp',
     mainBrowserEvidence: true,
+    cdpVersion,
     extensionId,
     manifestVersion: manifest.version,
     popupOpenMode: 'action.openPopup',
@@ -188,7 +200,8 @@ main().catch((error) => {
   console.error(JSON.stringify({
     status: 'FAIL',
     route: 'main-chrome-action-popup-cdp',
-    mainBrowserEvidence: true,
+    mainBrowserEvidence: popupOpened,
+    realUseReadiness: popupOpened ? 'MAIN_CHROME_POPUP_OPENED_BUT_FAILED' : 'MAIN_CHROME_POPUP_UNVERIFIED',
     error: error.message
   }, null, 2));
   process.exit(1);

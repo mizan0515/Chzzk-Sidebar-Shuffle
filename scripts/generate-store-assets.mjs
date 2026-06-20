@@ -162,7 +162,7 @@ function slideSvg({ title, subtitle, bullets, label, accent = '#00ffa3', mode = 
     <rect x="646" y="74" width="558" height="652" rx="32" fill="#0c141b" stroke="#28404d" stroke-width="2"/>
     <rect x="676" y="112" width="498" height="574" rx="24" fill="#101b24" stroke="#223542"/>
     ${mode === 'tiers' ? tierRows : ''}
-    <text x="925" y="698" text-anchor="middle" font-family="Inter, Segoe UI, sans-serif" font-size="18" font-weight="700" fill="#6f8190">CHZZK Tier Sort</text>
+    <text x="925" y="698" text-anchor="middle" font-family="Inter, Segoe UI, sans-serif" font-size="18" font-weight="700" fill="#6f8190">CHZZK Favorites &amp; Tiers</text>
   </svg>`;
 }
 
@@ -211,7 +211,7 @@ async function main() {
     {
       file: '02-popup-controls.png',
       title: ['Chrome 팝업에서', '바로 적용'],
-      subtitle: '정렬, 셔플, 목록 펼치기, 시청자 수 숨김을 빠르게 조작합니다.',
+      subtitle: '팝업에서 즉시 실행합니다.',
       bullets: ['현재 치지직 탭 감지', '버튼 상태와 이유 표시', '작은 팝업에서도 안정적인 조작'],
       label: 'CHROME',
       screenshot: popupShot,
@@ -224,7 +224,7 @@ async function main() {
     {
       file: '03-tier-manager.png',
       title: ['팝업 안에서', '티어 관리'],
-      subtitle: '새 탭을 열지 않고 같은 팝업에서 티어를 바꾸고 돌아옵니다.',
+      subtitle: '새 탭 없이 팝업 안에서 바로 관리합니다.',
       bullets: ['팝업 내부 관리 화면', '뒤로 가기로 원래 화면 복귀', '오프라인 추적 채널 포함'],
       label: 'MANAGE',
       screenshot: popupShot,
@@ -258,7 +258,7 @@ async function main() {
       <rect width="440" height="280" fill="url(#bg)"/>
       <circle cx="340" cy="72" r="106" fill="#00ffa3" opacity=".12"/>
       <image href="data:image/png;base64,${readFileSync(join(iconOut, 'icon-128.png')).toString('base64')}" x="44" y="52" width="112" height="112"/>
-      ${svgText(['CHZZK', 'Tier Sort'], 182, 104, { size: 38, weight: 900, lineHeight: 44 })}
+      ${svgText(['CHZZK', 'Favorites & Tiers'], 182, 104, { size: 34, weight: 900, lineHeight: 42 })}
       ${svgText(['즐겨찾기 · 티어 · 셔플'], 184, 184, { size: 19, weight: 700, fill: '#9fb0bd' })}
     </svg>
   `, join(outRoot, 'chrome', 'promo-small-440x280.png'), 440, 280);

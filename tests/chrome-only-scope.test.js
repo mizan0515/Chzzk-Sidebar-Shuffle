@@ -22,8 +22,8 @@ assert.equal(packageJson.scripts['qa:main:chrome:start'], undefined, 'Do not lau
 assert.equal(packageJson.scripts['qa:main:chrome:plan'], undefined, 'Do not present a separate Chrome profile launch plan as real-use QA');
 assert.match(packageJson.description, /Chrome\./, 'Package description should name Chrome as the product browser');
 assert.doesNotMatch(packageJson.description, /Whale|NAVER Whale/i, 'Package description must not advertise Whale as a supported product');
-assert.equal(manifest.name, 'CHZZK Favorite Tiers', 'Extension name should describe favorite/tier management, not only shuffling');
-assert.equal(manifest.action?.default_title, 'CHZZK Favorite Tiers', 'Chrome toolbar title should match the extension name');
+assert.equal(manifest.name, 'CHZZK Favorites & Tiers', 'Extension name should describe favorite/tier management, not only shuffling');
+assert.equal(manifest.action?.default_title, 'CHZZK Favorites & Tiers', 'Chrome toolbar title should match the extension name');
 
 assert.match(readme, /Chrome-only/i, 'README should state the Chrome-only product scope');
 assert.doesNotMatch(readme, /build:whale|qa:whale:isolated|qa:main:whale|dist\/whale|Whale Store/i, 'README must not instruct managers to build, QA, or release Whale');
@@ -57,5 +57,8 @@ assert.doesNotMatch(storeAssetGenerator, /whale|Whale|WHALE/, 'Store asset gener
 assert.match(storeAssetGenerator, /03-tier-manager\.png/, 'Chrome store screenshots should show in-popup tier management, not Whale sidebar');
 assert.doesNotMatch(mainChromePopupQa, /direct-popup-url-fallback|Target\.createTarget|popup\.html`\s*\}/, 'Main Chrome popup QA must not substitute direct popup URL for the extension action');
 assert.match(mainChromePopupQa, /Real extension action popup did not open/, 'Main Chrome popup QA should fail clearly when the real action popup cannot be opened');
+assert.match(mainChromePopupQa, /requireCdpReady/, 'Main Chrome popup QA should verify the CDP endpoint before claiming main-browser evidence');
+assert.match(mainChromePopupQa, /mainBrowserEvidence:\s*popupOpened/, 'Main Chrome popup QA failures before action.openPopup must not claim main-browser evidence');
+assert.match(mainChromePopupQa, /MAIN_CHROME_POPUP_UNVERIFIED/, 'Main Chrome popup QA should classify pre-popup failures as unverified, not real-use failures');
 
 console.log('chrome-only product scope regression passed');

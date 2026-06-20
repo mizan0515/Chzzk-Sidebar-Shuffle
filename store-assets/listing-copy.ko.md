@@ -1,15 +1,15 @@
-# CHZZK Favorite Tiers - 스토어 등록 문구 초안
+# CHZZK Favorites & Tiers - 스토어 등록 문구 초안
 
 ## Chrome Web Store
 
 ### 이름
-CHZZK Favorite Tiers
+CHZZK Favorites & Tiers
 
 ### 짧은 설명
 치지직 팔로잉 스트리머를 즐겨찾기, 티어, 셔플 기준으로 보기 좋게 정렬합니다.
 
 ### 상세 설명
-CHZZK Favorite Tiers는 치지직 팔로잉 사이드바를 자주 보는 사용자에게 필요한 정리 도구입니다. 즐겨찾는 스트리머를 별표로 고정하고, S/A/B/C/D 티어로 분류한 뒤, 내가 정한 우선순서대로 팔로잉 목록을 정렬할 수 있습니다.
+CHZZK Favorites & Tiers는 치지직 팔로잉 사이드바를 자주 보는 사용자에게 필요한 정리 도구입니다. 즐겨찾는 스트리머를 별표로 고정하고, S/A/B/C/D 티어로 분류한 뒤, 내가 정한 우선순서대로 팔로잉 목록을 정렬할 수 있습니다.
 
 주요 기능:
 - 치지직 팔로잉 채널 옆 별표로 즐겨찾기 등록

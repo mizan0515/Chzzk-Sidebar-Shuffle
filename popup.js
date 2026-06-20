@@ -35,9 +35,17 @@ let isWorking = false;
 document.addEventListener('DOMContentLoaded', async () => {
   browserBadge.textContent = 'Chrome';
   versionText.textContent = `v${platform.runtime?.getManifest?.().version || ''}`;
-  await loadSettings();
-  await hydrateActiveTab();
   setupEvents();
+  try {
+    await loadSettings();
+    await hydrateActiveTab();
+  } catch (error) {
+    setButtonsEnabled(false);
+    setStatus(platform?.isContextInvalidatedError?.(error)
+      ? '확장이 갱신되었습니다. 치지직 탭을 새로고침해 주세요.'
+      : '팝업을 초기화하지 못했습니다. 새로고침을 눌러 다시 연결하세요.');
+    window.ChzzkLogger?.warn?.('[POPUP] Initialization failed', error);
+  }
 });
 
 async function loadSettings() {

@@ -1,4 +1,4 @@
-# CHZZK Favorite Tiers
+# CHZZK Favorites & Tiers
 
 Chrome-only CHZZK extension for pinning favorite streamers, sorting the following sidebar by tiers, shuffling within groups, and tracking streamer activity.
 

@@ -95,4 +95,16 @@ assert.match(
   'Popup disabled buttons should expose their reason through the accessible label'
 );
 
+assert.match(
+  popupJs,
+  /setupEvents\(\);\s*try\s*\{[\s\S]*await loadSettings\(\);[\s\S]*await hydrateActiveTab\(\);/,
+  'Popup controls should be bound before async tab/storage hydration can fail'
+);
+
+assert.match(
+  popupJs,
+  /팝업을 초기화하지 못했습니다/,
+  'Popup initialization failures should render a visible recovery status instead of leaving a blank popup'
+);
+
 console.log('popup accessibility regression passed');
