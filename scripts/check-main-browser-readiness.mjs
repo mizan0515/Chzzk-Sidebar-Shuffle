@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 
 const DEFAULT_WHALE_PORT = Number(process.env.CHZZK_MAIN_WHALE_PORT || 9223);
+const DEFAULT_CHROME_PORT = Number(process.env.CHZZK_MAIN_CHROME_PORT || 9222);
 const requireMainBrowser = process.argv.includes('--require-main');
 
 function runPowerShell(script) {
@@ -81,6 +82,7 @@ async function main() {
   const chrome = chromeProcesses().map(classifyChromeProcess);
   const remoteDebugProcesses = processes.filter(item => item.hasRemoteDebugging);
   const cdp = await cdpVersion(DEFAULT_WHALE_PORT);
+  const chromeCdp = await cdpVersion(DEFAULT_CHROME_PORT);
   const portOwner = remoteDebugProcesses.find(item => !item.isCodexIsolatedProfile) ||
     remoteDebugProcesses.find(item => item.isCodexIsolatedProfile) ||
     null;
@@ -108,10 +110,15 @@ async function main() {
       mainWhaleAttachReady
     },
     chrome: {
+      checkedPort: DEFAULT_CHROME_PORT,
+      portOpen: Boolean(chromeCdp?.version),
+      cdpHost: chromeCdp?.host || null,
       processCount: chrome.length,
       mainChromeRunning: chrome.length > 0,
       remoteDebugProcessCount: chrome.filter(item => item.hasRemoteDebugging).length,
-      note: 'Chrome extension install/update and chrome://extensions are verified through the Chrome plugin real-use path when available; process presence alone is not extension QA evidence.'
+      note: chromeCdp?.version
+        ? 'Chrome CDP is reachable. Run npm run qa:main:chrome:popup after loading dist/chrome through scripts/Start-MainChromeQa.ps1.'
+        : 'Chrome process presence alone is not extension QA evidence. Use npm run qa:main:chrome:plan, then manager-approved qa:main:chrome:start when restart is acceptable.'
     },
     nextAction: mainWhaleAttachReady
       ? 'Use @whale/CDP on this existing main Whale endpoint for real-use QA.'
