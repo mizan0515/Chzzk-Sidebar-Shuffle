@@ -305,6 +305,11 @@ async function main() {
     }))()`);
 
     await evalIn(popup, `chrome.storage.local.set({
+      enableShuffle: false,
+      enableTierSort: true,
+      hideViewerCount: false,
+      showStarButtons: true,
+      enableAutoExpand: true,
       chzzkFavoriteTierState: {
         version: 2,
         channels: {

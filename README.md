@@ -102,6 +102,20 @@ npm run qa:chromium:isolated
 
 이 명령은 `dist/chrome`을 별도 Chromium 프로필에 로드하고, 테스트용 치지직 사이드바 DOM에서 팝업 버튼, 티어 저장, 정렬 적용, 버튼 오버플로우를 검증합니다. 출력의 `mainBrowserEvidence`가 `false`이면 메인 Chrome 실사용 검증이 아니라 자동 회귀 검증입니다.
 
+Chrome 확장 자동 QA:
+
+```powershell
+npm run qa:main:chrome:plan
+npm run qa:main:chrome:start
+npm run qa:main:chrome:popup
+npm run qa:browser-cleanup
+npm run guard:browser-cleanup
+```
+
+Chrome 136+는 기본 사용자 프로필에서 remote debugging을 막고, Chrome 137+ branded Chrome은 명령줄 `--load-extension`으로 압축해제 확장을 자동 로드하는 경로를 제한합니다. 따라서 자동 Chrome 확장 QA는 Chrome for Testing 또는 Playwright Chromium을 우선 사용합니다. 일반 Chrome에서 실제 툴바 아이콘 클릭, 로그인 상태, 확장 관리 화면을 확인해야 하면 `@chrome` 또는 네이티브 화면 제어가 붙은 세션에서만 실사용 증거로 인정합니다.
+
+`qa:browser-cleanup`은 이 저장소가 띄운 QA 브라우저만 닫습니다. 디버깅 포트, run-state, QA 프로필, QA 확장 경로를 기준으로 잡기 때문에 관리자의 일반 브라우저를 정리 대상으로 삼지 않습니다. PR_READY나 Done 전에는 `guard:browser-cleanup`을 통과해야 합니다.
+
 격리 Whale 회귀 하니스:
 
 ```powershell

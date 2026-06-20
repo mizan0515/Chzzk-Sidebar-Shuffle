@@ -74,17 +74,32 @@ async function waitForPopup(extensionId) {
   throw new Error(`Popup target did not appear. Last targets: ${last.map(item => item.url).join(', ')}`);
 }
 
+async function bringContentPageToFront() {
+  const targets = await json('/json/list');
+  const page = targets.find(item => item.type === 'page' && item.url?.startsWith('https://chzzk.naver.com/')) ||
+    targets.find(item => item.type === 'page' && !item.url?.startsWith('chrome-extension://'));
+  if (!page) return { ok: false, error: 'content page target not found' };
+  const client = makeClient(page);
+  await client.ready;
+  const result = await client.send('Page.bringToFront').then(() => ({ ok: true, url: page.url })).catch(error => ({ ok: false, error: error.message }));
+  client.close();
+  return result;
+}
+
 async function findExtensionWorker() {
   const targets = await json('/json/list');
-  const workers = targets.filter(item => item.type === 'service_worker' && /^chrome-extension:\/\/[^/]+\/js\/background\.js/.test(item.url || ''));
-  for (const worker of workers) {
-    const client = makeClient(worker);
+  const extensionTargets = targets.filter(item =>
+    (item.type === 'service_worker' || item.type === 'background_page' || item.type === 'page') &&
+    item.url?.startsWith('chrome-extension://')
+  );
+  for (const target of extensionTargets) {
+    const client = makeClient(target);
     await client.ready;
     await client.send('Runtime.enable');
     const manifest = await evaluate(client, 'chrome.runtime.getManifest()').catch(() => null);
     if (manifest?.name === 'Chzzk Sidebar Shuffler') {
-      const extensionId = worker.url.match(/^chrome-extension:\/\/([^/]+)/)?.[1] || '';
-      return { worker, client, extensionId, manifest };
+      const extensionId = target.url.match(/^chrome-extension:\/\/([^/]+)/)?.[1] || '';
+      return { worker: target, client, extensionId, manifest };
     }
     client.close();
   }
@@ -93,6 +108,7 @@ async function findExtensionWorker() {
 
 async function main() {
   const { client: workerClient, extensionId, manifest } = await findExtensionWorker();
+  const bringToFront = await bringContentPageToFront();
   const openResult = await evaluate(workerClient, `new Promise(resolve => {
     try {
       if (!chrome.action?.openPopup) {
@@ -107,16 +123,28 @@ async function main() {
     }
   })`);
 
-  if (!openResult?.ok) {
-    throw new Error(`chrome.action.openPopup failed: ${JSON.stringify(openResult)}`);
+  let popupTarget;
+  let popupOpenMode = 'action.openPopup';
+  if (openResult?.ok) {
+    popupTarget = await waitForPopup(extensionId);
+  } else {
+    popupOpenMode = 'direct-popup-url-fallback';
+    const fallbackTarget = await workerClient.send('Target.createTarget', {
+      url: `chrome-extension://${extensionId}/popup.html`
+    });
+    await sleep(500);
+    const targets = await json('/json/list');
+    popupTarget = targets.find(item => item.id === fallbackTarget.targetId) || await waitForPopup(extensionId);
   }
 
-  const popupTarget = await waitForPopup(extensionId);
   const popupClient = makeClient(popupTarget);
   await popupClient.ready;
   await popupClient.send('Runtime.enable');
   await popupClient.send('Page.enable');
-  await popupClient.send('Emulation.setDeviceMetricsOverride', { width: 360, height: 720, deviceScaleFactor: 1, mobile: false });
+  const metricsOverride = await popupClient
+    .send('Emulation.setDeviceMetricsOverride', { width: 360, height: 720, deviceScaleFactor: 1, mobile: false })
+    .then(() => ({ ok: true }))
+    .catch(error => ({ ok: false, error: error.message }));
   await sleep(500);
 
   const metrics = await evaluate(popupClient, `(() => {
@@ -153,7 +181,10 @@ async function main() {
     mainBrowserEvidence: true,
     extensionId,
     manifestVersion: manifest.version,
+    popupOpenMode,
+    bringToFront,
     openResult,
+    metricsOverride,
     metrics,
     screenshotPath
   };
