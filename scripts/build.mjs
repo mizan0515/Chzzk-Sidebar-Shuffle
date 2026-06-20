@@ -1,14 +1,14 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const target = process.argv[2] || 'all';
-const targets = target === 'all' ? ['chrome', 'whale'] : [target];
+const targets = target === 'all' ? ['chrome'] : [target];
 
-if (!targets.every(item => ['chrome', 'whale'].includes(item))) {
-  console.error('Usage: node scripts/build.mjs [chrome|whale|all]');
+if (!targets.every(item => ['chrome'].includes(item))) {
+  console.error('Usage: node scripts/build.mjs [chrome|all]');
   process.exit(1);
 }
 
@@ -35,6 +35,7 @@ function manifestFor(browser) {
 
   if (browser === 'chrome') {
     manifest.action = {
+      default_title: 'CHZZK Favorite Tiers',
       default_popup: 'popup.html',
       default_icon: {
         16: 'assets/icons/icon-16.png',
@@ -42,14 +43,6 @@ function manifestFor(browser) {
         48: 'assets/icons/icon-48.png',
         128: 'assets/icons/icon-128.png'
       }
-    };
-  } else {
-    manifest.sidebar_action = {
-      default_page: 'sidebar.html',
-      default_icon: { 16: 'assets/icons/icon-16.png' },
-      default_title: '치지직 티어 정렬',
-      use_navigation_bar: false,
-      mobile_user_agent: false
     };
   }
 
@@ -69,6 +62,14 @@ function zipDirectory(sourceDir, zipPath) {
 
   const result = spawnSync('zip', ['-qr', zipPath, '.'], { cwd: sourceDir, stdio: 'inherit' });
   if (result.status !== 0) process.exit(result.status || 1);
+}
+
+function removeUnsupportedBrowserArtifacts() {
+  rmSync(join(distRoot, 'whale'), { recursive: true, force: true });
+  if (!existsSync(artifactsRoot)) return;
+  readdirSync(artifactsRoot)
+    .filter(name => /^chzzk-sidebar-shuffler-whale-v/.test(name))
+    .forEach(name => rmSync(join(artifactsRoot, name), { recursive: true, force: true }));
 }
 
 function build(browser) {
@@ -102,6 +103,8 @@ function build(browser) {
   console.log(`Unpacked artifact: ${unpackedArtifactDir}`);
   console.log(`Artifact: ${zipPath}`);
 }
+
+removeUnsupportedBrowserArtifacts();
 
 for (const browser of targets) {
   build(browser);

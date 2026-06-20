@@ -53,10 +53,10 @@ assert.match(
   'Popup row click handling should not double-toggle direct button clicks'
 );
 
-assert.match(
+assert.doesNotMatch(
   popupJs,
-  /async function showWhaleSidebar\(\)/,
-  'Whale tier management should try the native sidebar action before falling back to a tab'
+  /showWhaleSidebar|sidebarAction\.show|platform\?\.isWhale\(\)/,
+  'Chrome tier management must stay in the popup and must not branch to Whale sidebar UI'
 );
 
 assert.match(

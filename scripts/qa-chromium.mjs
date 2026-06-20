@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const extensionDir = join(root, 'dist', 'chrome');
-const screenshotPath = join(root, 'artifacts', 'chromium-popup-final-340.png');
+const screenshotPath = join(root, 'artifacts', 'chromium-popup-final-390.png');
 const port = Number(process.env.CHZZK_QA_PORT || 9262);
 const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 
@@ -169,7 +169,7 @@ async function findExtensionId(targets) {
     await client.send('Runtime.enable');
     const manifest = await evalIn(client, 'chrome.runtime.getManifest && chrome.runtime.getManifest()');
     client.close();
-    if (manifest?.name === 'Chzzk Sidebar Shuffler') {
+    if (['CHZZK Favorite Tiers', 'Chzzk Sidebar Shuffler'].includes(manifest?.name)) {
       return target.url.match(/chrome-extension:\/\/([^/]+)/)?.[1] || null;
     }
   }
@@ -280,7 +280,7 @@ async function main() {
     await popup.ready;
     await popup.send('Runtime.enable');
     await popup.send('Page.enable');
-    await popup.send('Emulation.setDeviceMetricsOverride', { width: 340, height: 620, deviceScaleFactor: 1, mobile: false });
+    await popup.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 620, deviceScaleFactor: 1, mobile: false });
     await sleep(1000);
 
     const initial = await evalIn(popup, `(() => ({
@@ -455,7 +455,7 @@ async function main() {
       status: 'PASS',
       route: 'isolated-chromium-regression-harness',
       mainBrowserEvidence: false,
-      note: 'This proves extension behavior in an isolated Chromium harness. Use @chrome/@whale for manager main-browser QA.',
+      note: 'This proves extension behavior in an isolated Chromium harness. Use the logged-in main Chrome route for manager real-use QA.',
       extensionId,
       contentScriptVersion,
       observerReady,

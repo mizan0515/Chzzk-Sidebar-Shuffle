@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Chzzk Sidebar Shuffler",
+  "name": "CHZZK Favorite Tiers",
   "version": "1.5.4",
   "description": "치지직 팔로잉 스트리머를 즐겨찾기, 티어, 셔플 기준으로 정렬합니다.",
   "icons": {
@@ -29,6 +29,7 @@
     "service_worker": "js/background.js"
   },
   "action": {
+    "default_title": "CHZZK Favorite Tiers",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "assets/icons/icon-16.png",

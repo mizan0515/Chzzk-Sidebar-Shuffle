@@ -1,15 +1,15 @@
-# 치지직 티어 정렬 - 스토어 등록 문구 초안
+# CHZZK Favorite Tiers - 스토어 등록 문구 초안
 
 ## Chrome Web Store
 
 ### 이름
-치지직 티어 정렬
+CHZZK Favorite Tiers
 
 ### 짧은 설명
 치지직 팔로잉 스트리머를 즐겨찾기, 티어, 셔플 기준으로 보기 좋게 정렬합니다.
 
 ### 상세 설명
-치지직 티어 정렬은 치지직 팔로잉 사이드바를 자주 보는 사용자에게 필요한 정리 도구입니다. 즐겨찾는 스트리머를 별표로 고정하고, S/A/B/C/D 티어로 분류한 뒤, 내가 정한 우선순서대로 팔로잉 목록을 정렬할 수 있습니다.
+CHZZK Favorite Tiers는 치지직 팔로잉 사이드바를 자주 보는 사용자에게 필요한 정리 도구입니다. 즐겨찾는 스트리머를 별표로 고정하고, S/A/B/C/D 티어로 분류한 뒤, 내가 정한 우선순서대로 팔로잉 목록을 정렬할 수 있습니다.
 
 주요 기능:
 - 치지직 팔로잉 채널 옆 별표로 즐겨찾기 등록
@@ -21,7 +21,7 @@
 - 치지직 타임코드 복사 단축키
 - 현재 치지직 탭에 바로 정렬 적용
 
-Chrome에서는 확장 팝업에서 빠르게 정렬, 셔플, 설정을 조작하고 같은 팝업 안에서 티어 관리 화면으로 전환할 수 있습니다. Whale에서는 별도 사이드바 패널을 사용해 치지직 화면을 보면서 즐겨찾기와 티어를 더 넓게 관리할 수 있습니다.
+Chrome 확장 팝업에서 빠르게 정렬, 셔플, 설정을 조작하고 같은 팝업 안에서 티어 관리 화면으로 전환할 수 있습니다. 이 제품은 Chrome-only로 운영하며 Whale 사이드바 전용 UX는 출시 범위에 포함하지 않습니다.
 
 이 확장은 치지직 페이지에서만 동작하도록 제한되어 있으며, 즐겨찾기와 티어 정보는 브라우저의 확장 저장소에 저장됩니다.
 
@@ -39,40 +39,12 @@ Chrome에서는 확장 팝업에서 빠르게 정렬, 셔플, 설정을 조작�
 ### 개인정보/데이터 설명
 이 확장은 치지직 팔로잉 정렬과 활동 추적을 위해 브라우저 확장 저장소에 채널 이름, 채널 링크, 즐겨찾기 여부, 티어 배정, 활동 추적 여부, 최근 감지 상태를 저장합니다. 이 데이터는 확장 기능 제공을 위해 치지직/네이버 페이지와 API에서만 사용하며 별도 외부 서버로 전송하지 않습니다.
 
-## Whale Store
-
-### 이름
-치지직 티어 정렬
-
-### 짧은 설명
-Whale 사이드바에서 치지직 즐겨찾기 스트리머를 티어표처럼 관리하고 정렬합니다.
-
-### 상세 설명
-치지직 티어 정렬은 Whale 사이드바에 최적화된 치지직 팔로잉 관리 도구입니다. 치지직 탭을 열어 둔 상태에서 Whale의 사이드바 패널을 열고, 즐겨찾는 스트리머를 티어별로 배치한 뒤 현재 탭에 바로 정렬을 적용할 수 있습니다.
-
-주요 기능:
-- Whale 전용 사이드바 관리 화면
-- 즐겨찾기 스트리머 티어표 관리
-- S/A/B/C/D 티어와 미분류 즐겨찾기 분리
-- 검색, 즐겨찾기 추가/제거, 티어 변경
-- 활동 추적 중인 스트리머와 비방송 중 저장 채널 표시
-- 치지직 타임코드 복사
-- 현재 치지직 탭에 정렬 즉시 반영
-- 치지직 사이드바 채널 수 보존을 확인하는 회귀 QA
-
-Whale 버전은 `sidebar_action`을 사용하므로 Chrome 버전과 패키지가 분리되어 있습니다.
-
 ## 이미지 산출물
 
-### 공통 스크린샷
+### Chrome 스크린샷
 - `store-assets/chrome/screenshots/01-tier-sort.png`
 - `store-assets/chrome/screenshots/02-popup-controls.png`
-- `store-assets/chrome/screenshots/03-whale-sidebar.png`
 - `store-assets/chrome/screenshots/04-safe-qa.png`
-- `store-assets/whale/screenshots/01-tier-sort.png`
-- `store-assets/whale/screenshots/02-popup-controls.png`
-- `store-assets/whale/screenshots/03-whale-sidebar.png`
-- `store-assets/whale/screenshots/04-safe-qa.png`
 
 ### Chrome 프로모션 이미지
 - `store-assets/chrome/promo-small-440x280.png`
@@ -90,5 +62,4 @@ Whale 버전은 `sidebar_action`을 사용하므로 Chrome 버전과 패키지�
 
 - Chromium 격리 QA PASS는 기능 근거이지만, Chrome Web Store 공개 가능 판정의 전부가 아닙니다.
 - Chrome Store 공개 전에는 `npm run validate`, `npm run qa:chromium:isolated`, 가능하면 `npm run qa:main:required`를 분리해 확인해야 합니다.
-- Whale Store 공개 전에는 Whale 패키지 zip과 `sidebar_action` 동작을 확인해야 합니다.
 - 실제 스토어 제출은 계정, 심사, 공개 범위가 걸린 manager-only 결정입니다.

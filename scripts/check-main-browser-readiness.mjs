@@ -1,6 +1,5 @@
 import { spawnSync } from 'node:child_process';
 
-const DEFAULT_WHALE_PORT = Number(process.env.CHZZK_MAIN_WHALE_PORT || 9223);
 const DEFAULT_CHROME_PORT = Number(process.env.CHZZK_MAIN_CHROME_PORT || 9222);
 const requireMainBrowser = process.argv.includes('--require-main');
 
@@ -13,18 +12,6 @@ function runPowerShell(script) {
     throw new Error(result.stderr.trim() || result.stdout.trim() || 'PowerShell command failed');
   }
   return result.stdout.trim();
-}
-
-function whaleProcesses() {
-  const output = runPowerShell(`
-    Get-CimInstance Win32_Process |
-      Where-Object { $_.Name -like 'whale*' } |
-      Select-Object ProcessId, Name, CommandLine |
-      ConvertTo-Json -Depth 3
-  `);
-  if (!output) return [];
-  const parsed = JSON.parse(output);
-  return Array.isArray(parsed) ? parsed : [parsed];
 }
 
 function chromeProcesses() {
@@ -57,17 +44,6 @@ async function cdpVersion(port) {
   return null;
 }
 
-function classifyWhaleProcess(process) {
-  const commandLine = String(process.CommandLine || '');
-  const lower = commandLine.toLowerCase();
-  return {
-    pid: process.ProcessId,
-    hasRemoteDebugging: /--remote-debugging-port=/.test(commandLine),
-    isCodexIsolatedProfile: lower.includes('codex-whale-profile') || lower.includes('codex-whale-chzzk-sidebar'),
-    usesExplicitUserDataDir: /--user-data-dir=/i.test(commandLine)
-  };
-}
-
 function classifyChromeProcess(process) {
   const commandLine = String(process.CommandLine || '');
   return {
@@ -78,37 +54,19 @@ function classifyChromeProcess(process) {
 }
 
 async function main() {
-  const processes = whaleProcesses().map(classifyWhaleProcess);
   const chrome = chromeProcesses().map(classifyChromeProcess);
-  const remoteDebugProcesses = processes.filter(item => item.hasRemoteDebugging);
-  const cdp = await cdpVersion(DEFAULT_WHALE_PORT);
   const chromeCdp = await cdpVersion(DEFAULT_CHROME_PORT);
-  const portOwner = remoteDebugProcesses.find(item => !item.isCodexIsolatedProfile) ||
-    remoteDebugProcesses.find(item => item.isCodexIsolatedProfile) ||
-    null;
-
-  const mainWhaleRunning = processes.some(item => !item.isCodexIsolatedProfile);
-  const mainWhaleAttachReady = Boolean(cdp?.version && portOwner && !portOwner.isCodexIsolatedProfile);
-  const isolatedPortOnly = Boolean(cdp?.version && portOwner?.isCodexIsolatedProfile);
+  const remoteDebugProcesses = chrome.filter(item => item.hasRemoteDebugging);
+  const mainChromeAttachReady = Boolean(chromeCdp?.version && remoteDebugProcesses.length > 0);
 
   const result = {
-    status: mainWhaleAttachReady ? 'READY' : 'NOT_READY',
-    mainBrowserEvidence: mainWhaleAttachReady,
-    realUseReadiness: mainWhaleAttachReady ? 'MAIN_BROWSER_READY' : 'MAIN_BROWSER_UNVERIFIED',
-    completionGuard: mainWhaleAttachReady
-      ? 'Main Whale is controllable. Run the real CHZZK journey before claiming REAL_USE_PASS.'
-      : 'Do not claim REAL_USE_PASS, Done, or release-ready from isolated Chrome/Whale harnesses alone.',
+    status: mainChromeAttachReady ? 'READY' : 'NOT_READY',
+    mainBrowserEvidence: mainChromeAttachReady,
+    realUseReadiness: mainChromeAttachReady ? 'MAIN_CHROME_READY' : 'MAIN_CHROME_UNVERIFIED',
+    completionGuard: mainChromeAttachReady
+      ? 'Main Chrome is controllable. Run the real CHZZK extension action popup and following-page journey before claiming REAL_USE_PASS.'
+      : 'Do not claim REAL_USE_PASS, Done, or release-ready from isolated Chromium harnesses alone.',
     requireMainBrowser,
-    whale: {
-      checkedPort: DEFAULT_WHALE_PORT,
-      cdpHost: cdp?.host || null,
-      processCount: processes.length,
-      mainWhaleRunning,
-      remoteDebugProcessCount: remoteDebugProcesses.length,
-      portOpen: Boolean(cdp?.version),
-      portLooksIsolated: isolatedPortOnly,
-      mainWhaleAttachReady
-    },
     chrome: {
       checkedPort: DEFAULT_CHROME_PORT,
       portOpen: Boolean(chromeCdp?.version),
@@ -120,14 +78,14 @@ async function main() {
         ? 'Chrome CDP is reachable. Run npm run qa:main:chrome:popup after loading dist/chrome through scripts/Start-MainChromeQa.ps1.'
         : 'Chrome process presence alone is not extension QA evidence. Use npm run qa:main:chrome:plan, then manager-approved qa:main:chrome:start when restart is acceptable.'
     },
-    nextAction: mainWhaleAttachReady
-      ? 'Use @whale/CDP on this existing main Whale endpoint for real-use QA.'
-      : 'Main Whale is not controllable yet. Do not substitute isolated QA. Ask for approval to restart main Whale with a remote debugging port, or have the manager open Whale with remote debugging enabled.'
+    nextAction: mainChromeAttachReady
+      ? 'Use the existing main Chrome CDP endpoint for real-use QA. The next proof must click/open the Chrome extension action popup, not a direct popup URL.'
+      : 'Main Chrome is not controllable yet. Do not substitute isolated QA. Ask the manager to keep CHZZK logged in and provide/enable a controllable Chrome plugin or approve a main Chrome restart with remote debugging.'
   };
 
   console.log(JSON.stringify(result, null, 2));
 
-  if (requireMainBrowser && !mainWhaleAttachReady) {
+  if (requireMainBrowser && !mainChromeAttachReady) {
     process.exitCode = 2;
   }
 }

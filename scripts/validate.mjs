@@ -38,10 +38,6 @@ function validateManifest(browser) {
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   if (browser === 'chrome' && manifest.sidebar_action) fail('Chrome manifest must not include sidebar_action');
   if (browser === 'chrome' && !manifest.action) fail('Chrome manifest must include action');
-  if (browser === 'whale' && manifest.action) fail('Whale manifest must not include action');
-  if (browser === 'whale' && !manifest.sidebar_action) fail('Whale manifest must include sidebar_action');
-  if (browser === 'whale' && !manifest.sidebar_action.default_page) fail('Whale sidebar_action.default_page is required');
-  if (browser === 'whale' && !manifest.sidebar_action.default_icon) fail('Whale sidebar_action.default_icon is required');
 }
 
 function validateQaScriptNames() {
@@ -76,7 +72,6 @@ walk(join(root, 'tests'), file => file.endsWith('.test.js')).forEach((file) => {
 });
 run('node', ['scripts/build.mjs', 'all']);
 validateManifest('chrome');
-validateManifest('whale');
 
 if (!process.exitCode) {
   console.log('Validation passed');

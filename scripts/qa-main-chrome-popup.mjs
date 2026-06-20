@@ -97,7 +97,7 @@ async function findExtensionWorker() {
     await client.ready;
     await client.send('Runtime.enable');
     const manifest = await evaluate(client, 'chrome.runtime.getManifest()').catch(() => null);
-    if (manifest?.name === 'Chzzk Sidebar Shuffler') {
+    if (['CHZZK Favorite Tiers', 'Chzzk Sidebar Shuffler'].includes(manifest?.name)) {
       const extensionId = target.url.match(/^chrome-extension:\/\/([^/]+)/)?.[1] || '';
       return { worker: target, client, extensionId, manifest };
     }
@@ -142,7 +142,7 @@ async function main() {
   await popupClient.send('Runtime.enable');
   await popupClient.send('Page.enable');
   const metricsOverride = await popupClient
-    .send('Emulation.setDeviceMetricsOverride', { width: 360, height: 720, deviceScaleFactor: 1, mobile: false })
+    .send('Emulation.setDeviceMetricsOverride', { width: 390, height: 720, deviceScaleFactor: 1, mobile: false })
     .then(() => ({ ok: true }))
     .catch(error => ({ ok: false, error: error.message }));
   await sleep(500);
