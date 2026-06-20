@@ -24,6 +24,7 @@ assert.match(packageJson.description, /Chrome\./, 'Package description should na
 assert.doesNotMatch(packageJson.description, /Whale|NAVER Whale/i, 'Package description must not advertise Whale as a supported product');
 assert.equal(manifest.name, 'CHZZK Favorites & Tiers', 'Extension name should describe favorite/tier management, not only shuffling');
 assert.equal(manifest.action?.default_title, 'CHZZK Favorites & Tiers', 'Chrome toolbar title should match the extension name');
+assert.match(buildScript, /default_title:\s*'CHZZK Favorites & Tiers'/, 'Built Chrome action title should not drift from the product name');
 
 assert.match(readme, /Chrome-only/i, 'README should state the Chrome-only product scope');
 assert.doesNotMatch(readme, /build:whale|qa:whale:isolated|qa:main:whale|dist\/whale|Whale Store/i, 'README must not instruct managers to build, QA, or release Whale');
