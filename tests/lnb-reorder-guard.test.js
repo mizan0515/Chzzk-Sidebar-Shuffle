@@ -102,6 +102,12 @@ function channelLi(id) {
   return li;
 }
 
+function channelOrder(list) {
+  return list.children
+    .map(child => child.querySelector?.('a[href*="/live/"], a[href*="/channel/"]')?.href?.split('/').pop())
+    .filter(Boolean);
+}
+
 const body = new FakeElement('body');
 const head = new FakeElement('head');
 global.document = {
@@ -255,5 +261,81 @@ shuffle.findChannelsList = () => ({ list: directList, items: nestedAnchors });
 shuffle.findChannelItems = () => nestedAnchors;
 assert.equal(shuffle.applyTierSort({ shuffleWithinTiers: false }), true);
 assert.deepEqual(directList.children, [directHeader, directGamma, directAlpha, directBeta]);
+
+const pinList = new FakeElement('ul', '_list_pin');
+body.appendChild(pinList);
+pinList.appendChild(new FakeElement('li', '_header'));
+const pinAlpha = pinList.appendChild(channelLi('pin-alpha'));
+const pinBeta = pinList.appendChild(channelLi('pin-beta'));
+const pinGamma = pinList.appendChild(channelLi('pin-gamma'));
+const pinAnchors = [pinAlpha, pinBeta, pinGamma].map(item => item.querySelector('a[href*="/live/"], a[href*="/channel/"]'));
+global.window.ChzzkFavoriteTierStore = {
+  state: {
+    starred: ['pin-alpha', 'pin-beta', 'pin-gamma'],
+    tiers: [
+      { id: 's', order: 0 },
+      { id: 'a', order: 1 }
+    ],
+    assignments: {
+      'pin-alpha': 's',
+      'pin-beta': 'a'
+    },
+    tierOrder: {
+      s: ['pin-alpha'],
+      a: ['pin-beta']
+    }
+  }
+};
+global.window.ChzzkStar = {
+  isStarred: id => ['pin-alpha', 'pin-beta', 'pin-gamma'].includes(id),
+  extractChannelId: element => {
+    const link = element.querySelector?.('a[href*="/live/"], a[href*="/channel/"]') || (element.tagName === 'A' ? element : null);
+    return link?.href?.split('/').pop() || '';
+  }
+};
+shuffle.findChannelsList = () => ({ list: pinList, items: pinAnchors });
+shuffle.findChannelItems = () => pinAnchors;
+assert.equal(shuffle.applyTierSort({ shuffleWithinTiers: false, pinChannelId: 'pin-beta' }), true);
+assert.deepEqual(channelOrder(pinList), ['pin-beta', 'pin-alpha', 'pin-gamma']);
+
+const tierShuffleList = new FakeElement('ul', '_list_tier_shuffle');
+body.appendChild(tierShuffleList);
+tierShuffleList.appendChild(new FakeElement('li', '_header'));
+const tierIds = ['tier-s1', 'tier-s2', 'tier-a1', 'tier-a2', 'tier-u1', 'tier-u2', 'tier-g1'];
+const tierItems = tierIds.map(id => tierShuffleList.appendChild(channelLi(id)));
+const tierAnchors = tierItems.map(item => item.querySelector('a[href*="/live/"], a[href*="/channel/"]'));
+global.window.ChzzkFavoriteTierStore = {
+  state: {
+    starred: ['tier-s1', 'tier-s2', 'tier-a1', 'tier-a2', 'tier-u1', 'tier-u2'],
+    tiers: [
+      { id: 's', order: 0 },
+      { id: 'a', order: 1 }
+    ],
+    assignments: {
+      'tier-s1': 's',
+      'tier-s2': 's',
+      'tier-a1': 'a',
+      'tier-a2': 'a'
+    },
+    tierOrder: {
+      s: ['tier-s1', 'tier-s2'],
+      a: ['tier-a1', 'tier-a2']
+    }
+  }
+};
+global.window.ChzzkStar = {
+  isStarred: id => global.window.ChzzkFavoriteTierStore.state.starred.includes(id),
+  extractChannelId: element => {
+    const link = element.querySelector?.('a[href*="/live/"], a[href*="/channel/"]') || (element.tagName === 'A' ? element : null);
+    return link?.href?.split('/').pop() || '';
+  }
+};
+const originalShuffleArray = shuffle.shuffleArray;
+shuffle.shuffleArray = group => group.reverse();
+shuffle.findChannelsList = () => ({ list: tierShuffleList, items: tierAnchors });
+shuffle.findChannelItems = () => tierAnchors;
+assert.equal(shuffle.applyTierSort({ shuffleWithinTiers: true }), true);
+assert.deepEqual(channelOrder(tierShuffleList), ['tier-s2', 'tier-s1', 'tier-a2', 'tier-a1', 'tier-u2', 'tier-u1', 'tier-g1']);
+shuffle.shuffleArray = originalShuffleArray;
 
 console.log('lnb reorder guard passed');
