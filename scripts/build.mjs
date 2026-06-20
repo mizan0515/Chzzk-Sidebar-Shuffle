@@ -35,7 +35,7 @@ function manifestFor(browser) {
 
   if (browser === 'chrome') {
     manifest.action = {
-      default_title: 'CHZZK Favorite Tiers',
+      default_title: 'CHZZK Favorites & Tiers',
       default_popup: 'popup.html',
       default_icon: {
         16: 'assets/icons/icon-16.png',

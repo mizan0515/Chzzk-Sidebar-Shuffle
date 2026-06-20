@@ -9,7 +9,7 @@ const sidebarHtml = readFileSync(join(__dirname, '..', 'sidebar.html'), 'utf8');
 assert.match(
   sidebarCss,
   /--touch-target:\s*40px;/,
-  'Sidebar needs at least a 40px touch target token for reliable compact Whale controls'
+  'Tier manager needs at least a 40px touch target token for reliable compact Chrome popup controls'
 );
 
 assert.match(
@@ -27,7 +27,7 @@ assert.match(
 assert.doesNotMatch(
   sidebarCss,
   /\.toolbar\s*\{[\s\S]*position:\s*sticky;/,
-  'Sidebar toolbar should not float over tier rows while users scroll the Whale side panel'
+  'Tier manager toolbar should not float over tier rows while users scroll the popup manager'
 );
 
 assert.match(
@@ -57,7 +57,7 @@ assert.match(
 assert.match(
   sidebarCss,
   /@container \(min-width: 470px\)[\s\S]*\.streamer-card\s*\{[\s\S]*grid-template-columns:\s*36px minmax\(0, 1fr\) var\(--touch-target\) minmax\(210px, 0\.78fr\);/,
-  'Wide Whale sidebar layout should keep the favorite-button column aligned to the shared touch target'
+  'Wide popup manager layout should keep the favorite-button column aligned to the shared touch target'
 );
 
 assert.match(
@@ -117,7 +117,7 @@ assert.match(
 assert.match(
   sidebarCss,
   /\.tier-head h2,[\s\S]*\.section-title h2\s*\{[\s\S]*white-space:\s*nowrap;/,
-  'Tier headings should remain on one line in the Whale sidebar width range'
+  'Tier headings should remain on one line in the Chrome popup manager width range'
 );
 
 assert.match(

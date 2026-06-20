@@ -605,15 +605,12 @@ function orderedDropIds(zone, event, channelId) {
     .map(card => card.dataset.channelId)
     .filter(id => id && id !== channelId);
   const targetCard = event.target.closest?.('.streamer-card');
-  if (!targetCard || targetCard.dataset.channelId === channelId) {
-    return [...cards, channelId];
-  }
-
-  const targetId = targetCard.dataset.channelId;
-  const targetIndex = cards.indexOf(targetId);
-  if (targetIndex < 0) return [...cards, channelId];
-  const insertIndex = dropBeforeCard(event, targetCard) ? targetIndex : targetIndex + 1;
-  return [...cards.slice(0, insertIndex), channelId, ...cards.slice(insertIndex)];
+  return window.ChzzkSidebarDnd.computeOrderedDropIds(
+    cards,
+    channelId,
+    targetCard?.dataset.channelId || '',
+    !!(targetCard && targetCard.dataset.channelId !== channelId && dropBeforeCard(event, targetCard))
+  );
 }
 
 function dropBeforeCard(event, card) {
