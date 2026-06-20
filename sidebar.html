@@ -113,8 +113,35 @@
           <span>채널</span>
           <input id="activityChannelInput" type="text" autocomplete="off" placeholder="치지직 live 주소 또는 채널 ID">
         </label>
+        <label>
+          <span>카페</span>
+          <input id="activityCafeInput" type="text" autocomplete="off" placeholder="선택: 네이버 카페 주소">
+        </label>
+        <label>
+          <span>닉네임</span>
+          <input id="activityNicknameInput" type="text" autocomplete="off" placeholder="카페 글쓴이 닉네임">
+        </label>
         <button class="secondary" id="activityAddBtn" type="submit">추적 추가</button>
       </form>
+      <div class="activity-settings" aria-label="활동 추적 설정">
+        <button class="secondary" id="activityMonitorToggleBtn" type="button">자동 추적</button>
+        <label class="activity-setting-number">
+          <span>간격</span>
+          <input id="activityIntervalInput" type="number" min="1" max="60" step="1" inputmode="numeric">
+        </label>
+        <label class="activity-check">
+          <input id="activityNotifyLiveStartInput" type="checkbox">
+          <span>방송 시작</span>
+        </label>
+        <label class="activity-check">
+          <input id="activityNotifyTitleInput" type="checkbox">
+          <span>제목 변경</span>
+        </label>
+        <label class="activity-check">
+          <input id="activityNotifyCafeInput" type="checkbox">
+          <span>카페 글</span>
+        </label>
+      </div>
       <div class="activity-actions">
         <button class="secondary" id="activityRunBtn" type="button">지금 확인</button>
       </div>

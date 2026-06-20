@@ -152,7 +152,7 @@ assert.match(
 
 assert.match(
   sidebarHtml,
-  /id="activityForm"[\s\S]*id="activityNameInput"[\s\S]*id="activityChannelInput"[\s\S]*id="activityAddBtn"/,
+  /id="activityForm"[\s\S]*id="activityNameInput"[\s\S]*id="activityChannelInput"[\s\S]*id="activityCafeInput"[\s\S]*id="activityNicknameInput"[\s\S]*id="activityAddBtn"/,
   'Sidebar activity tracker needs an in-extension add form instead of relying on the old standalone popup'
 );
 
@@ -160,6 +160,24 @@ assert.match(
   sidebarJs,
   /ACTIVITY_ADD_STREAMER[\s\S]*ACTIVITY_TOGGLE_STREAMER[\s\S]*ACTIVITY_REMOVE_STREAMER/,
   'Sidebar activity tracker should add, toggle, and remove tracked streamers through prefixed background messages'
+);
+
+assert.match(
+  sidebarHtml,
+  /id="activityMonitorToggleBtn"[\s\S]*id="activityIntervalInput"[\s\S]*id="activityNotifyLiveStartInput"[\s\S]*id="activityNotifyTitleInput"[\s\S]*id="activityNotifyCafeInput"/,
+  'Sidebar activity tracker should expose monitoring interval and notification settings in the extension UI'
+);
+
+assert.match(
+  sidebarJs,
+  /activityMonitorToggleBtn[\s\S]*updateActivitySettings/,
+  'Sidebar activity monitor toggle should be wired to settings updates'
+);
+
+assert.match(
+  sidebarJs,
+  /ACTIVITY_SAVE_SETTINGS[\s\S]*normalizeActivitySettings/,
+  'Sidebar activity settings should save through the background and re-render normalized state'
 );
 
 console.log('sidebar control size regression passed');

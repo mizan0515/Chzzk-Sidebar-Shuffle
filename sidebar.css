@@ -436,10 +436,52 @@ input:focus-visible,
   align-content: start;
 }
 
-.activity-actions {
+.activity-actions,
+.activity-settings {
   padding: var(--space-2);
   border-bottom: 1px solid var(--border);
   display: grid;
+}
+
+.activity-settings {
+  grid-template-columns: minmax(0, 1fr) minmax(72px, 0.55fr);
+  gap: var(--space-2);
+}
+
+.activity-setting-number,
+.activity-check {
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.activity-setting-number {
+  justify-content: space-between;
+}
+
+.activity-setting-number input {
+  width: 42px;
+  height: 28px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: center;
+  padding: 0 4px;
+}
+
+.activity-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  flex: 0 0 auto;
 }
 
 .activity-form {
@@ -690,6 +732,14 @@ input:focus-visible,
 }
 
 @container (min-width: 470px) {
+  .activity-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .activity-form button {
+    grid-column: 1 / -1;
+  }
+
   .streamer-card {
     grid-template-columns: 36px minmax(0, 1fr) var(--touch-target) minmax(210px, 0.78fr);
   }

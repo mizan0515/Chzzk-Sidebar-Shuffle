@@ -35,6 +35,13 @@ const els = {
   activityForm: document.getElementById('activityForm'),
   activityNameInput: document.getElementById('activityNameInput'),
   activityChannelInput: document.getElementById('activityChannelInput'),
+  activityCafeInput: document.getElementById('activityCafeInput'),
+  activityNicknameInput: document.getElementById('activityNicknameInput'),
+  activityMonitorToggleBtn: document.getElementById('activityMonitorToggleBtn'),
+  activityIntervalInput: document.getElementById('activityIntervalInput'),
+  activityNotifyLiveStartInput: document.getElementById('activityNotifyLiveStartInput'),
+  activityNotifyTitleInput: document.getElementById('activityNotifyTitleInput'),
+  activityNotifyCafeInput: document.getElementById('activityNotifyCafeInput'),
   activityList: document.getElementById('activityList'),
   activityCount: document.getElementById('activityCount')
 };
@@ -47,7 +54,7 @@ let lastDetectedCount = 0;
 let pageStatus = {};
 let reinjectedTabIds = new Set();
 let isWorking = false;
-let activityState = { streamers: [], events: [], states: {}, lastRun: null };
+let activityState = { streamers: [], events: [], states: {}, settings: defaultActivitySettings(), lastRun: null };
 
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
@@ -91,6 +98,7 @@ function bindEvents() {
         ...activityState,
         events: response.events || activityState.events || [],
         states: response.states || activityState.states || {},
+        settings: normalizeActivitySettings(response.settings || activityState.settings),
         lastRun: response.lastRun || activityState.lastRun
       };
       await mergeActivityChannels();
@@ -105,7 +113,9 @@ function bindEvents() {
     event.preventDefault();
     const input = {
       name: els.activityNameInput?.value?.trim() || '',
-      channel: els.activityChannelInput?.value?.trim() || ''
+      channel: els.activityChannelInput?.value?.trim() || '',
+      cafe: els.activityCafeInput?.value?.trim() || '',
+      nickname: els.activityNicknameInput?.value?.trim() || ''
     };
     await runExclusive('추적 채널을 추가하는 중입니다.', async () => {
       const response = await platform.sendRuntimeMessage?.({ type: 'ACTIVITY_ADD_STREAMER', input }).catch(error => ({ ok: false, error: error.message || String(error) }));
@@ -115,12 +125,29 @@ function bindEvents() {
       }
       els.activityNameInput.value = '';
       els.activityChannelInput.value = '';
+      if (els.activityCafeInput) els.activityCafeInput.value = '';
+      if (els.activityNicknameInput) els.activityNicknameInput.value = '';
       await loadActivityState();
       els.connectionText.textContent = '활동 추적 채널을 추가했습니다.';
       render();
       return true;
     });
   });
+  els.activityMonitorToggleBtn?.addEventListener('click', () => updateActivitySettings({
+    isMonitoring: activityState.settings?.isMonitoring === false
+  }));
+  els.activityIntervalInput?.addEventListener('change', () => updateActivitySettings({
+    intervalMinutes: Number(els.activityIntervalInput.value) || defaultActivitySettings().intervalMinutes
+  }));
+  els.activityNotifyLiveStartInput?.addEventListener('change', () => updateActivitySettings({
+    notifyLiveStart: !!els.activityNotifyLiveStartInput.checked
+  }));
+  els.activityNotifyTitleInput?.addEventListener('change', () => updateActivitySettings({
+    notifyTitleChange: !!els.activityNotifyTitleInput.checked
+  }));
+  els.activityNotifyCafeInput?.addEventListener('change', () => updateActivitySettings({
+    notifyCafePosts: !!els.activityNotifyCafeInput.checked
+  }));
 }
 
 async function runExclusive(message, task) {
@@ -196,11 +223,12 @@ async function loadActivityState() {
       streamers: response.streamers || [],
       events: response.events || [],
       states: response.states || {},
+      settings: normalizeActivitySettings(response.settings),
       lastRun: response.lastRun || null
     };
     await mergeActivityChannels();
   } else {
-    activityState = { streamers: [], events: [], states: {}, lastRun: null };
+    activityState = { streamers: [], events: [], states: {}, settings: defaultActivitySettings(), lastRun: null };
   }
 }
 
@@ -624,7 +652,19 @@ function renderActivity() {
   if (!els.activityList || !els.activityCount) return;
   const events = activityState.events || [];
   const streamers = activityState.streamers || [];
+  const settings = normalizeActivitySettings(activityState.settings);
   els.activityCount.textContent = String(streamers.length);
+  if (els.activityMonitorToggleBtn) {
+    const isMonitoring = settings.isMonitoring !== false;
+    els.activityMonitorToggleBtn.textContent = isMonitoring ? '자동 추적 켜짐' : '자동 추적 꺼짐';
+    els.activityMonitorToggleBtn.setAttribute('aria-pressed', String(isMonitoring));
+  }
+  if (els.activityIntervalInput && document.activeElement !== els.activityIntervalInput) {
+    els.activityIntervalInput.value = String(settings.intervalMinutes);
+  }
+  if (els.activityNotifyLiveStartInput) els.activityNotifyLiveStartInput.checked = settings.notifyLiveStart !== false;
+  if (els.activityNotifyTitleInput) els.activityNotifyTitleInput.checked = settings.notifyTitleChange !== false;
+  if (els.activityNotifyCafeInput) els.activityNotifyCafeInput.checked = settings.notifyCafePosts !== false;
   els.activityList.textContent = '';
   if (!streamers.length && !events.length) {
     els.activityList.appendChild(emptyNode('추적 채널 없음'));
@@ -638,7 +678,7 @@ function renderActivity() {
     item.innerHTML = `
       <div class="activity-copy">
         <strong>${escapeText(streamer.name || liveState.channelName || streamer.channelId || '스트리머')}</strong>
-        <span>${escapeText(streamer.channelId ? (liveState.isLive ? '방송 중' : '방송 꺼짐') : '채널 없음')}</span>
+        <span>${escapeText(activitySummaryText(streamer, liveState))}</span>
       </div>
       <div class="activity-row-actions">
         <button class="tiny" type="button" data-activity-toggle="${escapeAttr(streamer.id || streamer.channelId)}" aria-pressed="${streamer.enabled !== false}">${streamer.enabled === false ? '켜기' : '끄기'}</button>
@@ -660,6 +700,51 @@ function renderActivity() {
       <span>${escapeText(event.message || event.createdAt || '')}</span>
     `;
     els.activityList.appendChild(item);
+  });
+}
+
+function activitySummaryText(streamer, liveState) {
+  const parts = [];
+  if (streamer.channelId) parts.push(liveState.isLive ? '방송 중' : '방송 꺼짐');
+  if (streamer.cafe?.cafeName) parts.push(`카페 ${streamer.cafe.cafeRealName || streamer.cafe.cafeName}`);
+  return parts.length ? parts.join(' · ') : '연결 없음';
+}
+
+function defaultActivitySettings() {
+  return {
+    intervalMinutes: 5,
+    isMonitoring: true,
+    notifyLiveStart: true,
+    notifyTitleChange: true,
+    notifyCafePosts: true
+  };
+}
+
+function normalizeActivitySettings(value) {
+  const settings = { ...defaultActivitySettings(), ...(value || {}) };
+  settings.intervalMinutes = Math.max(1, Math.min(60, Number(settings.intervalMinutes) || 5));
+  settings.isMonitoring = settings.isMonitoring !== false;
+  settings.notifyLiveStart = settings.notifyLiveStart !== false;
+  settings.notifyTitleChange = settings.notifyTitleChange !== false;
+  settings.notifyCafePosts = settings.notifyCafePosts !== false;
+  return settings;
+}
+
+async function updateActivitySettings(settings) {
+  await runExclusive('활동 추적 설정을 저장하는 중입니다.', async () => {
+    const response = await platform.sendRuntimeMessage?.({ type: 'ACTIVITY_SAVE_SETTINGS', settings }).catch(error => ({ ok: false, error: error.message || String(error) }));
+    if (!response?.ok) {
+      els.connectionText.textContent = '활동 추적 설정을 저장하지 못했습니다.';
+      renderActivity();
+      return false;
+    }
+    activityState = {
+      ...activityState,
+      settings: normalizeActivitySettings(response.settings)
+    };
+    els.connectionText.textContent = '활동 추적 설정을 저장했습니다.';
+    render();
+    return true;
   });
 }
 
