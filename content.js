@@ -1813,7 +1813,6 @@
 
     const messageApis = Array.from(new Set([
       window.ChzzkPlatform?.api,
-      window.whale,
       window.chrome
     ].filter(api => api?.runtime?.onMessage)));
 

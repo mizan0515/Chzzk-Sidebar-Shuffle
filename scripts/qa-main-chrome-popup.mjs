@@ -123,19 +123,10 @@ async function main() {
     }
   })`);
 
-  let popupTarget;
-  let popupOpenMode = 'action.openPopup';
-  if (openResult?.ok) {
-    popupTarget = await waitForPopup(extensionId);
-  } else {
-    popupOpenMode = 'direct-popup-url-fallback';
-    const fallbackTarget = await workerClient.send('Target.createTarget', {
-      url: `chrome-extension://${extensionId}/popup.html`
-    });
-    await sleep(500);
-    const targets = await json('/json/list');
-    popupTarget = targets.find(item => item.id === fallbackTarget.targetId) || await waitForPopup(extensionId);
+  if (!openResult?.ok) {
+    throw new Error(`Real extension action popup did not open: ${openResult?.lastError || openResult?.error || 'unknown error'}`);
   }
+  const popupTarget = await waitForPopup(extensionId);
 
   const popupClient = makeClient(popupTarget);
   await popupClient.ready;
@@ -181,7 +172,7 @@ async function main() {
     mainBrowserEvidence: true,
     extensionId,
     manifestVersion: manifest.version,
-    popupOpenMode,
+    popupOpenMode: 'action.openPopup',
     bringToFront,
     openResult,
     metricsOverride,

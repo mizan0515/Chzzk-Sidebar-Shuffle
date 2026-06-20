@@ -74,13 +74,9 @@ The required real-use path is:
 
 If the session cannot attach to the logged-in Chrome browser, report `UNVERIFIED_MAIN_CHROME_LOGIN_REQUIRED` and ask the manager to open/log in to Chrome or provide a controllable Chrome plugin/session. Do not substitute isolated Chromium or direct popup URL evidence.
 
-## Automated Regression Harness
+## Browser QA Cleanup
 
-```powershell
-npm run qa:chromium:isolated
-```
-
-This loads `dist/chrome` into a separate Chromium profile and checks the core sidebar and popup behavior against a fixture. Its output has `mainBrowserEvidence: false`.
+This project does not use an isolated Chrome or Chromium profile as acceptance QA. Real-use browser evidence must come from the manager-visible Chrome surface, through the approved `@chrome` or Computer Use route.
 
 Before Done or PR_READY:
 
@@ -94,12 +90,10 @@ The cleanup command targets only browser sessions created by this repository's Q
 ## Main Chrome Helpers
 
 ```powershell
-npm run qa:main:chrome:plan
-npm run qa:main:chrome:start
 npm run qa:main:chrome:popup
 ```
 
-Chrome 136+ blocks remote debugging against the default user data directory, and Chrome 137+ restricts command-line unpacked extension loading in branded Chrome. For automatic development QA, prefer Chrome for Testing or Playwright Chromium. For logged-in real-use QA, attach to the actual manager Chrome through the approved Chrome/browser-control route and keep the evidence label separate.
+`qa:main:chrome:popup` only works when the manager-visible Chrome instance is already reachable through CDP. It must not launch a separate Chrome profile. If CDP is not attached, use the approved `@chrome` or Computer Use route to inspect the real Chrome window, or report that main Chrome real-use evidence is still unavailable.
 
 ## Completion Gate
 

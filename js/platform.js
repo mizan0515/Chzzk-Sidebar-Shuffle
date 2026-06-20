@@ -1,18 +1,17 @@
 /**
  * Browser platform adapter.
- * Keeps Chrome/Whale namespace differences out of feature code.
+ * Keeps Chrome extension API access in one place.
  */
 (function() {
   'use strict';
 
-  const primaryApi = globalThis.whale || globalThis.chrome;
   const chromeApi = globalThis.chrome;
   let contextInvalidated = false;
 
   function resolveApi(path) {
     const parts = path.split('.');
     const resolveFrom = (api) => parts.reduce((obj, key) => obj && obj[key], api);
-    return resolveFrom(primaryApi) ? primaryApi : chromeApi;
+    return resolveFrom(chromeApi) ? chromeApi : null;
   }
 
   function hasApi(path) {
@@ -24,7 +23,7 @@
   }
 
   function lastRuntimeError() {
-    return primaryApi?.runtime?.lastError || chromeApi?.runtime?.lastError;
+    return chromeApi?.runtime?.lastError;
   }
 
   function isContextInvalidatedError(error) {
@@ -91,14 +90,10 @@
   }
 
   const platform = {
-    api: primaryApi,
+    api: chromeApi,
 
     isExtensionContext() {
-      return !!primaryApi || !!chromeApi;
-    },
-
-    isWhale() {
-      return !!globalThis.whale;
+      return !!chromeApi;
     },
 
     hasApi,
@@ -110,15 +105,15 @@
     },
 
     get storage() {
-      return primaryApi?.storage || chromeApi?.storage;
+      return chromeApi?.storage;
     },
 
     get tabs() {
-      return primaryApi?.tabs || chromeApi?.tabs;
+      return chromeApi?.tabs;
     },
 
     get runtime() {
-      return primaryApi?.runtime || chromeApi?.runtime;
+      return chromeApi?.runtime;
     },
 
     getManifestVersion() {
@@ -130,11 +125,7 @@
     },
 
     get scripting() {
-      return primaryApi?.scripting || chromeApi?.scripting;
-    },
-
-    get sidebarAction() {
-      return primaryApi?.sidebarAction || chromeApi?.sidebarAction;
+      return chromeApi?.scripting;
     },
 
     storageGet(area, keys) {

@@ -75,12 +75,12 @@ async function main() {
       mainChromeRunning: chrome.length > 0,
       remoteDebugProcessCount: chrome.filter(item => item.hasRemoteDebugging).length,
       note: chromeCdp?.version
-        ? 'Chrome CDP is reachable. Run npm run qa:main:chrome:popup after loading dist/chrome through scripts/Start-MainChromeQa.ps1.'
-        : 'Chrome process presence alone is not extension QA evidence. Use npm run qa:main:chrome:plan, then manager-approved qa:main:chrome:start when restart is acceptable.'
+        ? 'Chrome CDP is reachable. Run npm run qa:main:chrome:popup only after confirming it targets the manager-visible Chrome instance.'
+        : 'Chrome process presence alone is not extension QA evidence. Use the approved @chrome or Computer Use route against the manager-visible Chrome window; do not launch a separate isolated Chrome profile.'
     },
     nextAction: mainChromeAttachReady
-      ? 'Use the existing main Chrome CDP endpoint for real-use QA. The next proof must click/open the Chrome extension action popup, not a direct popup URL.'
-      : 'Main Chrome is not controllable yet. Do not substitute isolated QA. Ask the manager to keep CHZZK logged in and provide/enable a controllable Chrome plugin or approve a main Chrome restart with remote debugging.'
+    ? 'Use the existing main Chrome CDP endpoint for real-use QA. The next proof must click/open the Chrome extension action popup, not a direct popup URL.'
+    : 'Main Chrome is not controllable yet. Do not substitute isolated QA. Use Computer Use against the manager-visible Chrome window or ask the manager to provide/enable a controllable Chrome plugin session.'
   };
 
   console.log(JSON.stringify(result, null, 2));

@@ -29,7 +29,7 @@ if (!existsSync(boardPath)) {
 
 const board = JSON.parse(readFileSync(boardPath, 'utf8'));
 const validation = board.validation || {};
-const requiredPassFields = ['static', 'build', 'chromium_isolated'];
+const requiredPassFields = ['static', 'build'];
 const missing = requiredPassFields.filter(field => !isPass(validation[field]));
 
 if (missing.length) {
@@ -53,5 +53,5 @@ console.log(JSON.stringify({
   branch: board.branch || null,
   note: isPass(mainBrowser)
     ? 'Main browser real-use evidence is present.'
-    : 'Static/build/isolated QA are complete, but root Done/release-ready still requires main-browser evidence or an explicit manager-only follow-up.'
+    : 'Static/build gates are complete, but root Done/release-ready still requires main-browser evidence or an explicit manager-only follow-up.'
 }, null, 2));

@@ -4,7 +4,6 @@ try {
   console.warn('[ACTIVITY] activityCore unavailable', error);
 }
 
-const primaryApi = globalThis.whale || globalThis.chrome;
 const chromeApi = globalThis.chrome;
 const ACTIVITY_KEYS = {
   streamers: 'satChzzkStreamers',
@@ -17,7 +16,7 @@ const ACTIVITY_KEYS = {
 function apiWith(path) {
   const parts = path.split('.');
   const hasPath = (api) => !!parts.reduce((obj, key) => obj && obj[key], api);
-  return hasPath(primaryApi) ? primaryApi : chromeApi;
+  return hasPath(chromeApi) ? chromeApi : null;
 }
 
 function promisify(callbackApi, thisArg, ...args) {
@@ -27,25 +26,25 @@ function promisify(callbackApi, thisArg, ...args) {
       return;
     }
     callbackApi.call(thisArg, ...args, (result) => {
-      const runtimeError = primaryApi?.runtime?.lastError || chromeApi?.runtime?.lastError;
+      const runtimeError = chromeApi?.runtime?.lastError;
       if (runtimeError) reject(new Error(runtimeError.message || String(runtimeError)));
       else resolve(result);
     });
   });
 }
 
-primaryApi?.runtime?.onInstalled?.addListener(() => {
-  // Keeps a debuggable extension target available for Whale sidebar validation.
+chromeApi?.runtime?.onInstalled?.addListener(() => {
+  // Keeps a debuggable extension target available for Chrome action-popup QA.
 });
 
-(primaryApi?.commands || chromeApi?.commands)?.onCommand?.addListener?.((command) => {
+chromeApi?.commands?.onCommand?.addListener?.((command) => {
   if (command !== 'copy-timecode') return;
   copyTimecodeFromActiveTab().catch((error) => {
     console.warn('[TIMECODE] Copy command failed', error);
   });
 });
 
-(primaryApi?.runtime || chromeApi?.runtime)?.onMessage?.addListener((message, sender, sendResponse) => {
+chromeApi?.runtime?.onMessage?.addListener((message, sender, sendResponse) => {
   if (message?.type?.startsWith?.('ACTIVITY_')) {
     handleActivityMessage(message).then(sendResponse).catch((error) => {
       sendResponse({ ok: false, error: error.message || String(error) });

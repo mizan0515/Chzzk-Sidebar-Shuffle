@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
+const { existsSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
 
 const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
@@ -8,11 +8,18 @@ const readme = readFileSync(join(__dirname, '..', 'README.md'), 'utf8');
 const buildScript = readFileSync(join(__dirname, '..', 'scripts', 'build.mjs'), 'utf8');
 const validateScript = readFileSync(join(__dirname, '..', 'scripts', 'validate.mjs'), 'utf8');
 const completionGuard = readFileSync(join(__dirname, '..', 'scripts', 'check-completion-guard.mjs'), 'utf8');
+const readinessScript = readFileSync(join(__dirname, '..', 'scripts', 'check-main-browser-readiness.mjs'), 'utf8');
 const popupJs = readFileSync(join(__dirname, '..', 'popup.js'), 'utf8');
+const storeAssetGenerator = readFileSync(join(__dirname, '..', 'scripts', 'generate-store-assets.mjs'), 'utf8');
+const mainChromePopupQa = readFileSync(join(__dirname, '..', 'scripts', 'qa-main-chrome-popup.mjs'), 'utf8');
 
 assert.equal(packageJson.scripts['build:whale'], undefined, 'Product scope is Chrome-only; build:whale must not be exposed');
 assert.equal(packageJson.scripts['qa:whale:isolated'], undefined, 'Product scope is Chrome-only; Whale isolated QA must not be a required lane');
 assert.equal(packageJson.scripts['qa:main:whale:start'], undefined, 'Product scope is Chrome-only; main Whale restart automation must not be exposed');
+assert.equal(packageJson.scripts['qa:chromium:isolated'], undefined, 'Do not expose isolated Chromium QA; it can be mistaken for real-use evidence');
+assert.equal(packageJson.scripts['qa:isolated'], undefined, 'Do not expose generic isolated browser QA');
+assert.equal(packageJson.scripts['qa:main:chrome:start'], undefined, 'Do not launch a separate Chrome QA profile from npm scripts');
+assert.equal(packageJson.scripts['qa:main:chrome:plan'], undefined, 'Do not present a separate Chrome profile launch plan as real-use QA');
 assert.match(packageJson.description, /Chrome\./, 'Package description should name Chrome as the product browser');
 assert.doesNotMatch(packageJson.description, /Whale|NAVER Whale/i, 'Package description must not advertise Whale as a supported product');
 assert.equal(manifest.name, 'CHZZK Favorite Tiers', 'Extension name should describe favorite/tier management, not only shuffling');
@@ -27,8 +34,28 @@ assert.match(buildScript, /removeUnsupportedBrowserArtifacts/, 'Build script sho
 
 assert.doesNotMatch(validateScript, /validateManifest\('whale'\)|sidebar_action\.default_page|Whale manifest/i, 'Validation must not require a Whale manifest');
 assert.doesNotMatch(completionGuard, /whale_isolated|Chrome\/Whale|Main Whale/i, 'Completion guard must not require Whale evidence');
+assert.doesNotMatch(completionGuard, /chromium_isolated|isolated QA are complete/i, 'Completion guard must not require or reward isolated Chromium evidence');
 assert.match(completionGuard, /validation\.main_chrome\s*\|\|\s*validation\.main_browser/, 'Completion guard should read the Chrome-specific real-use evidence field');
 assert.match(completionGuard, /UNVERIFIED\|NOT_READY\|blocked/, 'Completion guard should classify UNVERIFIED_* values as scoped non-release states');
+assert.doesNotMatch(readinessScript, /Start-MainChromeQa|qa:main:chrome:plan|qa:main:chrome:start|restart with remote debugging/i, 'Readiness output must not route managers to separate Chrome profile launch helpers');
+assert.match(readinessScript, /Computer Use/, 'Readiness output should route unavailable CDP cases to manager-visible Computer Use evidence');
 assert.doesNotMatch(popupJs, /showWhaleSidebar|sidebarAction\.show|platform\?\.isWhale\(\)/, 'Popup tier manager must not leave Chrome popup flow for Whale sidebar');
+
+[
+  join(__dirname, '..', 'scripts', 'qa-whale.mjs'),
+  join(__dirname, '..', 'scripts', 'qa-main-whale-realuse.mjs'),
+  join(__dirname, '..', 'scripts', 'Start-MainWhaleQa.ps1'),
+  join(__dirname, '..', 'scripts', 'qa-chromium.mjs'),
+  join(__dirname, '..', 'scripts', 'Start-MainChromeQa.ps1'),
+  join(__dirname, '..', 'store-assets', 'whale'),
+  join(__dirname, '..', 'store-assets', 'chrome', 'screenshots', '03-whale-sidebar.png')
+].forEach((path) => {
+  assert.equal(existsSync(path), false, `Chrome-only scope must not leave stale Whale surface: ${path}`);
+});
+
+assert.doesNotMatch(storeAssetGenerator, /whale|Whale|WHALE/, 'Store asset generator must not create or advertise Whale assets');
+assert.match(storeAssetGenerator, /03-tier-manager\.png/, 'Chrome store screenshots should show in-popup tier management, not Whale sidebar');
+assert.doesNotMatch(mainChromePopupQa, /direct-popup-url-fallback|Target\.createTarget|popup\.html`\s*\}/, 'Main Chrome popup QA must not substitute direct popup URL for the extension action');
+assert.match(mainChromePopupQa, /Real extension action popup did not open/, 'Main Chrome popup QA should fail clearly when the real action popup cannot be opened');
 
 console.log('chrome-only product scope regression passed');
