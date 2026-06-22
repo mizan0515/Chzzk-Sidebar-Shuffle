@@ -33,6 +33,7 @@ class ShuffleManager {
     this.shuffleEverCompleted = false;
     this.lastKnownOrder = [];
     this.baselineOrderById = new Map();
+    this.lastAutoTierShuffleSignature = '';
 
     // CSS 스타일 주입
     this.injectCSS();
@@ -1027,6 +1028,9 @@ class ShuffleManager {
         };
       });
       this.rememberBaselineOrder(containers);
+      const autoShuffleSignature = this.getAutoTierShuffleSignature(containers, options);
+      const effectiveShuffleWithinTiers = shuffleWithinTiers &&
+        (!autoShuffleSignature || autoShuffleSignature !== this.lastAutoTierShuffleSignature);
 
       const pinned = [];
       const eligibleContainers = containers.filter((item) => {
@@ -1055,7 +1059,7 @@ class ShuffleManager {
           }
           return this.getBaselineOrder(a) - this.getBaselineOrder(b);
         });
-        if (shuffleWithinTiers) this.shuffleArray(group);
+        if (effectiveShuffleWithinTiers) this.shuffleArray(group);
       });
 
       const finalOrder = groups.flat();
@@ -1065,6 +1069,9 @@ class ShuffleManager {
       this.mutationLock = true;
       if (!this.applySafeReordering(list, finalOrder)) return false;
       this.saveCurrentOrder(list);
+      if (autoShuffleSignature && effectiveShuffleWithinTiers) {
+        this.lastAutoTierShuffleSignature = autoShuffleSignature;
+      }
       this.shuffleCompleted = true;
       this.shuffleEverCompleted = true;
       this.lastReorderTime = Date.now();
@@ -1118,6 +1125,21 @@ class ShuffleManager {
     return container?.originalIndex ?? 999999;
   }
 
+  getAutoTierShuffleSignature(containers, options = {}) {
+    if (!options.shuffleWithinTiers) return '';
+    const reason = String(options.reason || '');
+    if (!reason || reason === 'global-shuffle' || reason === 'manual') return '';
+    return (Array.isArray(containers) ? containers : [])
+      .map((item) => [
+        item?.id || '',
+        item?.tierId || '',
+        item?.isStarred ? '1' : '0',
+        item?.isLive ? '1' : '0'
+      ].join(':'))
+      .sort()
+      .join('|');
+  }
+
   /**
    * 현재 DOM 순서가 저장된 순서와 다른지 확인
    * @param {Element} list - 채널 리스트 요소
@@ -1145,6 +1167,7 @@ class ShuffleManager {
     this.channelCountHistory = [];
     this.lastKnownOrder = [];
     this.baselineOrderById = new Map();
+    this.lastAutoTierShuffleSignature = '';
 
     if (this.dynamicLoadingMonitor) {
       clearInterval(this.dynamicLoadingMonitor);

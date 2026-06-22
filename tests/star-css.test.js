@@ -54,6 +54,18 @@ assert.match(
 
 assert.match(
   starJs,
+  /\.chzzk-star-host-collapsed > \.chzzk-star-slot\s*\{[\s\S]*display:\s*none !important;/,
+  'Collapsed LNB rows should hide the injected star slot instead of crowding the icon rail'
+);
+
+assert.match(
+  starJs,
+  /updateCollapsedStarVisibility\(container\)[\s\S]*getBoundingClientRect[\s\S]*width < 88[\s\S]*aria-expanded'\) === 'false'[\s\S]*chzzk-star-host-collapsed/,
+  'Star injection should detect collapsed LNB hosts by width and expanded-state signals'
+);
+
+assert.match(
+  starJs,
   /\.chzzk-extension-reload-notice\s*\{[\s\S]*position:\s*fixed;[\s\S]*z-index:\s*2147483647;/,
   'Extension context recovery notice should stay visible above the CHZZK page when stale content scripts are clicked'
 );

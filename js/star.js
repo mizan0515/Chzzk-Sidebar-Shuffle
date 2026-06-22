@@ -391,6 +391,14 @@ class StarManager {
         align-items: center !important;
       }
 
+      .chzzk-star-host-collapsed > a {
+        padding-right: 0 !important;
+      }
+
+      .chzzk-star-host-collapsed > .chzzk-star-slot {
+        display: none !important;
+      }
+
       .chzzk-star-btn svg {
         width: 18px;
         height: 18px;
@@ -620,6 +628,23 @@ class StarManager {
     }
     slot.textContent = '';
     slot.appendChild(starBtn);
+    this.updateCollapsedStarVisibility(container);
+  }
+
+  updateCollapsedStarVisibility(container) {
+    const rect = typeof container?.getBoundingClientRect === 'function' ? container.getBoundingClientRect() : null;
+    const width = rect?.width || container?.offsetWidth || 0;
+    const collapsedByWidth = width > 0 && width < 88;
+    const collapsedByState =
+      container?.getAttribute?.('aria-expanded') === 'false' ||
+      container?.closest?.('[aria-expanded="false"]') ||
+      container?.closest?.('[class*="collapsed"], [class*="fold"], [class*="mini"]');
+
+    if (collapsedByWidth || collapsedByState) {
+      container.classList.add('chzzk-star-host-collapsed');
+    } else {
+      container.classList.remove('chzzk-star-host-collapsed');
+    }
   }
 
   /**

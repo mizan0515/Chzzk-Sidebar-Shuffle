@@ -21,7 +21,23 @@
     ];
   }
 
-  const api = { computeOrderedDropIds };
+  function computeAutoScrollDelta(pointerY, viewportHeight, edgeSize = 72, maxDelta = 28) {
+    const y = Number(pointerY);
+    const height = Number(viewportHeight);
+    if (!Number.isFinite(y) || !Number.isFinite(height) || height <= 0) return 0;
+
+    const edge = Math.max(24, Math.min(Number(edgeSize) || 72, Math.floor(height / 3)));
+    const max = Math.max(4, Number(maxDelta) || 28);
+    if (y < edge) {
+      return -Math.ceil(((edge - y) / edge) * max);
+    }
+    if (y > height - edge) {
+      return Math.ceil(((y - (height - edge)) / edge) * max);
+    }
+    return 0;
+  }
+
+  const api = { computeAutoScrollDelta, computeOrderedDropIds };
 
   if (typeof window !== 'undefined') {
     window.ChzzkSidebarDnd = api;

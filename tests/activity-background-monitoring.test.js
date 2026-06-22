@@ -52,6 +52,7 @@ async function main() {
   const createdAlarms = [];
   const notifications = [];
   const openedTabs = [];
+  const clearedNotifications = [];
   let notificationClickListener = null;
 
   const context = {
@@ -123,6 +124,10 @@ async function main() {
             notificationClickListener = listener;
           }
         },
+        clear(id, callback) {
+          clearedNotifications.push(id);
+          callback?.(true);
+        },
         create(id, options, callback) {
           notifications.push({ id, options });
           callback?.(id);
@@ -182,10 +187,16 @@ async function main() {
   assert.equal(storage.satCafeCursors['123456'], '10');
   assert.deepEqual(JSON.parse(JSON.stringify(storage.satCafeLastSeen['alpha-cafe:AlphaWriter'])), ['10']);
   assert.equal(storage.satLastRun.reason, 'manual');
+  assert.equal(openedTabs.length, 0, 'Activity checks and notification creation must not open tabs automatically');
 
   await notificationClickListener(notifications[0].id);
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(openedTabs[0].url, 'https://chzzk.naver.com/live/0123456789abcdef0123456789abcdef');
+  assert.deepEqual(clearedNotifications, [notifications[0].id]);
+
+  await notificationClickListener(notifications[0].id);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(openedTabs.length, 1, 'Repeated notification click events for the same notification must not open duplicate tabs');
 
   const stoppedResponse = await context.handleActivityMessage({ type: 'ACTIVITY_STOP_MONITORING' });
   assert.equal(stoppedResponse.ok, true);

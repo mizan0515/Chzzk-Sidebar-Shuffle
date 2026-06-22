@@ -5,6 +5,7 @@ const { join } = require('node:path');
 const sidebarJs = readFileSync(join(__dirname, '..', 'sidebar.js'), 'utf8');
 const sidebarCss = readFileSync(join(__dirname, '..', 'sidebar.css'), 'utf8');
 const { computeOrderedDropIds } = require('../js/sidebarDnd.js');
+const { computeAutoScrollDelta } = require('../js/sidebarDnd.js');
 
 assert.match(
   sidebarJs,
@@ -22,6 +23,18 @@ assert.match(
   sidebarJs,
   /targetCard\.classList\.add\(dropBeforeCard\(event, targetCard\) \? 'drop-before' : 'drop-after'\)/,
   'Sidebar DnD should provide before/after feedback before the user drops a card'
+);
+
+assert.match(
+  sidebarJs,
+  /function scheduleDragAutoScroll\(event\)[\s\S]*computeAutoScrollDelta[\s\S]*window\.scrollBy/,
+  'Dragging near the popup edge should auto-scroll so off-screen tiers remain reachable'
+);
+
+assert.match(
+  sidebarJs,
+  /tierButtons\(activeTierId\)[\s\S]*data-tier-choice/,
+  'Tier chips should remain as the non-drag fallback for assigning an off-screen tier'
 );
 
 assert.match(
@@ -52,6 +65,24 @@ assert.deepEqual(
   computeOrderedDropIds(['alpha', 'beta', 'gamma'], 'beta', '', false),
   ['alpha', 'gamma', 'beta'],
   'Dropping on empty zone space should append the dragged card'
+);
+
+assert.equal(
+  computeAutoScrollDelta(10, 600) < 0,
+  true,
+  'Dragging near the top edge should scroll upward'
+);
+
+assert.equal(
+  computeAutoScrollDelta(590, 600) > 0,
+  true,
+  'Dragging near the bottom edge should scroll downward'
+);
+
+assert.equal(
+  computeAutoScrollDelta(300, 600),
+  0,
+  'Dragging in the middle should not scroll'
 );
 
 console.log('sidebar DnD reorder regression passed');

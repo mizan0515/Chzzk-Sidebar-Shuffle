@@ -25,6 +25,7 @@ const ACTIVITY_KEYS = {
 const CAFE_PAGE_SIZE = 50;
 const CAFE_CATCHUP_PAGES = 2;
 const CAFE_HEADER_RULE_ID = 9001;
+const openedNotificationIds = new Set();
 
 function apiWith(path) {
   const parts = path.split('.');
@@ -255,9 +256,12 @@ async function notifyActivityEvent(event) {
 }
 
 async function openActivityNotification(notificationId) {
+  if (!notificationId || openedNotificationIds.has(notificationId)) return;
   const state = await getActivityState();
   const event = (state.events || []).find(item => item.id === notificationId);
   if (!event?.url || !chromeApi?.tabs?.create) return;
+  openedNotificationIds.add(notificationId);
+  chromeApi?.notifications?.clear?.(notificationId, () => undefined);
   await chromeApi.tabs.create({ url: event.url });
 }
 

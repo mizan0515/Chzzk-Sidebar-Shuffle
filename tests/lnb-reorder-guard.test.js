@@ -331,11 +331,28 @@ global.window.ChzzkStar = {
   }
 };
 const originalShuffleArray = shuffle.shuffleArray;
-shuffle.shuffleArray = group => group.reverse();
+let tierShuffleCalls = 0;
+shuffle.shuffleArray = group => {
+  tierShuffleCalls += 1;
+  group.reverse();
+};
 shuffle.findChannelsList = () => ({ list: tierShuffleList, items: tierAnchors });
 shuffle.findChannelItems = () => tierAnchors;
 assert.equal(shuffle.applyTierSort({ shuffleWithinTiers: true }), true);
 assert.deepEqual(channelOrder(tierShuffleList), ['tier-s2', 'tier-s1', 'tier-a2', 'tier-a1', 'tier-u2', 'tier-u1', 'tier-g1']);
+assert.equal(tierShuffleCalls, 4);
+
+assert.equal(shuffle.applyTierSort({ shuffleWithinTiers: true, reason: 'mutation:new-channel-content' }), true);
+assert.deepEqual(channelOrder(tierShuffleList), ['tier-s2', 'tier-s1', 'tier-a2', 'tier-a1', 'tier-u2', 'tier-u1', 'tier-g1']);
+assert.equal(tierShuffleCalls, 8);
+
+assert.equal(shuffle.applyTierSort({ shuffleWithinTiers: true, reason: 'mutation:new-channel-content' }), true);
+assert.deepEqual(channelOrder(tierShuffleList), ['tier-s1', 'tier-s2', 'tier-a1', 'tier-a2', 'tier-u1', 'tier-u2', 'tier-g1']);
+assert.equal(tierShuffleCalls, 8);
+
+assert.equal(shuffle.applyTierSort({ shuffleWithinTiers: true }), true);
+assert.deepEqual(channelOrder(tierShuffleList), ['tier-s2', 'tier-s1', 'tier-a2', 'tier-a1', 'tier-u2', 'tier-u1', 'tier-g1']);
+assert.equal(tierShuffleCalls, 12);
 shuffle.shuffleArray = originalShuffleArray;
 
 console.log('lnb reorder guard passed');

@@ -54,6 +54,7 @@ let lastDetectedCount = 0;
 let pageStatus = {};
 let reinjectedTabIds = new Set();
 let isWorking = false;
+let dragAutoScrollTimer = null;
 let activityState = { streamers: [], events: [], states: {}, settings: defaultActivitySettings(), lastRun: null };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -560,6 +561,7 @@ function attachDropZone(zone) {
   zone.addEventListener('dragover', (event) => {
     event.preventDefault();
     zone.classList.add('drag-over');
+    scheduleDragAutoScroll(event);
     const targetCard = event.target.closest?.('.streamer-card');
     zone.querySelectorAll('.streamer-card').forEach(card => card.classList.remove('drop-before', 'drop-after'));
     if (targetCard && targetCard.dataset.channelId !== draggedId) {
@@ -569,9 +571,11 @@ function attachDropZone(zone) {
   zone.addEventListener('dragleave', () => {
     zone.classList.remove('drag-over');
     zone.querySelectorAll('.streamer-card').forEach(card => card.classList.remove('drop-before', 'drop-after'));
+    stopDragAutoScroll();
   });
   zone.addEventListener('drop', async (event) => {
     event.preventDefault();
+    stopDragAutoScroll();
     zone.classList.remove('drag-over');
     zone.querySelectorAll('.streamer-card').forEach(card => card.classList.remove('drop-before', 'drop-after'));
     if (!draggedId || isWorking) return;
@@ -698,6 +702,28 @@ function renderActivity() {
     `;
     els.activityList.appendChild(item);
   });
+}
+
+function scheduleDragAutoScroll(event) {
+  const delta = window.ChzzkSidebarDnd.computeAutoScrollDelta(
+    event.clientY,
+    window.innerHeight || document.documentElement.clientHeight
+  );
+  if (!delta) {
+    stopDragAutoScroll();
+    return;
+  }
+
+  if (dragAutoScrollTimer) return;
+  dragAutoScrollTimer = window.setInterval(() => {
+    window.scrollBy({ top: delta, left: 0, behavior: 'auto' });
+  }, 50);
+}
+
+function stopDragAutoScroll() {
+  if (!dragAutoScrollTimer) return;
+  window.clearInterval(dragAutoScrollTimer);
+  dragAutoScrollTimer = null;
 }
 
 function activitySummaryText(streamer, liveState) {
