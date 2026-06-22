@@ -35,7 +35,7 @@
    * @returns {Object} 와이드모드 상태 정보
    */
   function detectWideModeState() {
-    console.log('🔍 [CHZZK] detectWideModeState() 시작 - 새 버전 2025');
+    window.ChzzkLogger?.debug('🔍 [CHZZK] detectWideModeState() 시작');
     try {
       // 1. 실제 치지직 LNB 요소들의 존재 여부 확인 (실제 HTML 구조 기반)
       const lnbElements = {
@@ -57,7 +57,7 @@
 
       const lnbPresent = Object.values(lnbElements).some(el => el !== null);
 
-      console.log('🔍 [CHZZK] LNB 요소 찾기 결과:', {
+      window.ChzzkLogger?.debug('🔍 [CHZZK] LNB 요소 찾기 결과:', {
         lnbPresent: lnbPresent,
         foundElements: Object.entries(lnbElements).filter(([key, el]) => el !== null).map(([key]) => key),
         detailedElements: Object.entries(lnbElements).reduce((acc, [key, el]) => {
@@ -92,7 +92,7 @@
                      lnbElements.anyAside;
 
           if (!lnb) {
-            console.log('🔍 [CHZZK] lnbActuallyHidden: LNB 요소 없음 → true');
+            window.ChzzkLogger?.debug('🔍 [CHZZK] lnbActuallyHidden: LNB 요소 없음 → true');
             return true; // LNB가 없으면 숨겨진 것으로 판단
           }
 
@@ -103,7 +103,7 @@
                           lnb.offsetWidth === 0 ||
                           lnb.offsetHeight === 0;
 
-          console.log('🔍 [CHZZK] lnbActuallyHidden 체크:', {
+          window.ChzzkLogger?.debug('🔍 [CHZZK] lnbActuallyHidden 체크:', {
             element: `${lnb.tagName}.${lnb.className}`,
             display: style.display,
             visibility: style.visibility,
@@ -121,7 +121,7 @@
             if (parentStyle.display === 'none' ||
                 parentStyle.visibility === 'hidden' ||
                 parentStyle.opacity === '0') {
-              console.log('🔍 [CHZZK] lnbActuallyHidden: 부모 요소 숨김 발견:', {
+              window.ChzzkLogger?.debug('🔍 [CHZZK] lnbActuallyHidden: 부모 요소 숨김 발견:', {
                 parentTag: parent.tagName,
                 parentClass: parent.className,
                 display: parentStyle.display,
@@ -135,7 +135,7 @@
           }
 
           const finalResult = isHidden || parentHidden;
-          console.log('🔍 [CHZZK] lnbActuallyHidden 최종 결과:', finalResult);
+          window.ChzzkLogger?.debug('🔍 [CHZZK] lnbActuallyHidden 최종 결과:', finalResult);
           return finalResult;
         })(),
 
@@ -251,7 +251,7 @@
       ];
 
       // 각 지표의 상세 값들을 로깅
-      console.log('📊 [CHZZK] 각 지표 상세 값:', {
+      window.ChzzkLogger?.debug('📊 [CHZZK] 각 지표 상세 값:', {
         lnbPresent: lnbPresent,
         wideModeIndicators: wideModeIndicators,
         urlIndicators: urlIndicators,
@@ -267,9 +267,9 @@
       const activeIndicators = indicators.filter(ind => ind.value);
       const inactiveIndicators = indicators.filter(ind => !ind.value);
 
-      console.log(`🔍 [CHZZK] detectWideModeState() 결과: 와이드모드=${isWideMode}, 점수=${totalScore}/100, LNB존재=${lnbPresent}`);
-      console.log('✅ [CHZZK] 활성 지표들:', activeIndicators.map(ind => `${ind.name}(${ind.weight}점)`).join(', '));
-      console.log('❌ [CHZZK] 비활성 지표들:', inactiveIndicators.map(ind => `${ind.name}(${ind.weight}점)`).join(', '));
+      window.ChzzkLogger?.debug(`🔍 [CHZZK] detectWideModeState() 결과: 와이드모드=${isWideMode}, 점수=${totalScore}/100, LNB존재=${lnbPresent}`);
+      window.ChzzkLogger?.debug('✅ [CHZZK] 활성 지표들:', activeIndicators.map(ind => `${ind.name}(${ind.weight}점)`).join(', '));
+      window.ChzzkLogger?.debug('비활성 지표들:', inactiveIndicators.map(ind => `${ind.name}(${ind.weight}점)`).join(', '));
 
       return {
         isWideMode: isWideMode,
@@ -589,49 +589,35 @@
    */
   function startWideModeMonitoring() {
     // 기본 로깅 먼저 테스트
-    console.log('🎬 [CHZZK] startWideModeMonitoring() 함수 호출됨');
-    window.ChzzkLogger?.info('🎬 [CHZZK] startWideModeMonitoring() 함수 호출됨');
+    window.ChzzkLogger?.debug('🎬 [CHZZK] startWideModeMonitoring() 함수 호출됨');
 
     try {
       // 초기 상태 설정
-      console.log('🔍 [CHZZK] detectWideModeState() 호출 중...');
+      window.ChzzkLogger?.debug('🔍 [CHZZK] detectWideModeState() 호출 중...');
       const initialState = detectWideModeState();
-      console.log('🔍 [CHZZK] detectWideModeState() 결과:', initialState);
+      window.ChzzkLogger?.debug('🔍 [CHZZK] detectWideModeState() 결과:', initialState);
 
       wideModeState.isWideMode = initialState.isWideMode;
       wideModeState.lnbElementsPresent = initialState.lnbPresent;
       wideModeState.lastStateChange = Date.now();
 
-      console.log(`🎬 [WIDE MODE] 모니터링 시작 - 초기 상태: ${initialState.isWideMode ? 'WIDE' : 'NORMAL'}, LNB: ${initialState.lnbPresent ? 'PRESENT' : 'ABSENT'}, 점수: ${initialState.confidence}/100`);
-      window.ChzzkLogger?.info(`🎬 [WIDE MODE] 모니터링 시작 - 초기 상태: ${initialState.isWideMode ? 'WIDE' : 'NORMAL'}, LNB: ${initialState.lnbPresent ? 'PRESENT' : 'ABSENT'}, 점수: ${initialState.confidence}/100`);
+      window.ChzzkLogger?.debug(`🎬 [WIDE MODE] 모니터링 시작 - 초기 상태: ${initialState.isWideMode ? 'WIDE' : 'NORMAL'}, LNB: ${initialState.lnbPresent ? 'PRESENT' : 'ABSENT'}, 점수: ${initialState.confidence}/100`);
 
       // 초기 상태 상세 로깅
       if (initialState.confidence > 0) {
         const activeIndicators = initialState.indicators.scoreBreakdown.filter(ind => ind.value);
-        console.log('🎯 [WIDE MODE] 초기 활성 지표:', activeIndicators.map(ind => `${ind.name}(${ind.score}점)`).join(', '));
-        window.ChzzkLogger?.info('🎯 [WIDE MODE] 초기 활성 지표:', activeIndicators.map(ind => `${ind.name}(${ind.score}점)`).join(', '));
+        window.ChzzkLogger?.debug('🎯 [WIDE MODE] 초기 활성 지표:', activeIndicators.map(ind => `${ind.name}(${ind.score}점)`).join(', '));
       }
 
-      console.log('⏰ [CHZZK] 주기적 모니터링 시작 (1초 간격)');
+      window.ChzzkLogger?.debug('⏰ [CHZZK] 주기적 모니터링 시작 (1초 간격)');
 
       // 주기적 모니터링 (1초 간격)
       const monitoringInterval = setInterval(() => {
         try {
           const currentState = handleWideModeStateChange();
 
-          // 더 빈번한 디버깅 로깅 (현재 상태를 매번 출력)
-          console.log(`⏱️ [CHZZK] 모니터링 틱: 와이드모드=${currentState?.isWideMode}, 점수=${currentState?.confidence}, LNB=${currentState?.lnbPresent}`);
-
           // 디버깅을 위한 상세 로깅 (5초마다)
           if (Date.now() % 5000 < 1000) {
-            console.log('🔍 [WIDE MODE] 현재 감지 상태:', {
-              isWideMode: currentState?.isWideMode,
-              score: currentState?.confidence,
-              lnbPresent: currentState?.lnbPresent,
-              activeIndicators: currentState?.indicators?.scoreBreakdown
-                ?.filter(ind => ind.value)
-                ?.map(ind => `${ind.name}(${ind.score})`) || []
-            });
             window.ChzzkLogger?.debug('🔍 [WIDE MODE] 현재 감지 상태:', {
               isWideMode: currentState?.isWideMode,
               score: currentState?.confidence,
@@ -653,10 +639,10 @@
       // 즉시 키보드 이벤트 감지 (T키 - 극장 모드)
       document.addEventListener('keydown', (event) => {
         if (event.key === 't' || event.key === 'T') {
-          console.log('⌨️ [CHZZK] T키 감지 - 극장모드 토글 예상');
+          window.ChzzkLogger?.debug('⌨️ [CHZZK] T키 감지 - 극장모드 토글 예상');
           // T키는 치지직에서 극장모드 토글 키
           setTimeout(() => {
-            console.log('⌨️ [CHZZK] T키 후 상태 체크 실행');
+            window.ChzzkLogger?.debug('⌨️ [CHZZK] T키 후 상태 체크 실행');
             handleWideModeStateChange();
           }, 500); // 키 입력 후 0.5초 뒤 상태 체크
         }
@@ -676,7 +662,6 @@
         }
       });
 
-      console.log('✅ [CHZZK] 와이드모드 모니터링 설정 완료');
       window.ChzzkLogger?.debug('🎬 [WIDE MODE] 모니터링 설정 완료 (1초 간격 + 키보드 + 전체화면 이벤트)');
 
     } catch (error) {
@@ -795,7 +780,7 @@
       registerGlobalFunctions();
 
       // 6. 와이드모드 모니터링 시작
-      console.log('🚀 [CHZZK] 와이드모드 모니터링 시작 호출');
+      window.ChzzkLogger?.debug('🚀 [CHZZK] 와이드모드 모니터링 시작 호출');
       startWideModeMonitoring();
 
       initialized = true;
