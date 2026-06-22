@@ -681,6 +681,11 @@ function renderActivity() {
         <strong>${escapeText(streamer.name || liveState.channelName || streamer.channelId || '스트리머')}</strong>
         <span>${escapeText(activitySummaryText(streamer, liveState))}</span>
       </div>
+      <div class="activity-notification-controls" aria-label="${escapeAttr(streamer.name || streamer.channelId || '스트리머')} 알림 설정">
+        ${activityNotificationToggle(streamer, 'liveStart', '방송')}
+        ${activityNotificationToggle(streamer, 'titleChange', '제목')}
+        ${activityNotificationToggle(streamer, 'cafePosts', '카페')}
+      </div>
       <div class="activity-row-actions">
         <button class="tiny" type="button" data-activity-toggle="${escapeAttr(streamer.id || streamer.channelId)}" aria-pressed="${streamer.enabled !== false}">${streamer.enabled === false ? '켜기' : '끄기'}</button>
         <button class="tiny danger-text" type="button" data-activity-remove="${escapeAttr(streamer.id || streamer.channelId)}">삭제</button>
@@ -688,6 +693,11 @@ function renderActivity() {
     `;
     item.querySelector('[data-activity-toggle]')?.addEventListener('click', () => updateActivityStreamer(streamer.id || streamer.channelId, streamer.enabled === false));
     item.querySelector('[data-activity-remove]')?.addEventListener('click', () => removeActivityStreamer(streamer.id || streamer.channelId));
+    item.querySelectorAll('[data-activity-notification]').forEach((input) => {
+      input.addEventListener('change', () => updateActivityStreamerNotifications(streamer.id || streamer.channelId, {
+        [input.dataset.activityNotification]: !!input.checked
+      }));
+    });
     els.activityList.appendChild(item);
   });
   events.slice(0, 5).forEach((event) => {
@@ -733,6 +743,16 @@ function activitySummaryText(streamer, liveState) {
   return parts.length ? parts.join(' · ') : '연결 없음';
 }
 
+function activityNotificationToggle(streamer, key, label) {
+  const checked = streamer.notifications?.[key] !== false ? ' checked' : '';
+  return `
+    <label class="activity-notification-toggle">
+      <input type="checkbox" data-activity-notification="${escapeAttr(key)}"${checked}>
+      <span>${escapeText(label)}</span>
+    </label>
+  `;
+}
+
 function defaultActivitySettings() {
   return {
     intervalMinutes: 5,
@@ -776,6 +796,19 @@ async function updateActivityStreamer(id, enabled) {
     const response = await platform.sendRuntimeMessage?.({ type: 'ACTIVITY_TOGGLE_STREAMER', id, enabled }).catch(error => ({ ok: false, error: error.message || String(error) }));
     if (!response?.ok) {
       els.connectionText.textContent = '추적 상태를 저장하지 못했습니다.';
+      return false;
+    }
+    await loadActivityState();
+    render();
+    return true;
+  });
+}
+
+async function updateActivityStreamerNotifications(id, notifications) {
+  await runExclusive('스트리머 알림 설정을 저장하는 중입니다.', async () => {
+    const response = await platform.sendRuntimeMessage?.({ type: 'ACTIVITY_UPDATE_STREAMER_NOTIFICATIONS', id, notifications }).catch(error => ({ ok: false, error: error.message || String(error) }));
+    if (!response?.ok) {
+      els.connectionText.textContent = '스트리머 알림 설정을 저장하지 못했습니다.';
       return false;
     }
     await loadActivityState();

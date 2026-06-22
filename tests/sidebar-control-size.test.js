@@ -163,6 +163,12 @@ assert.match(
 );
 
 assert.match(
+  sidebarJs,
+  /data-activity-notification[\s\S]*ACTIVITY_UPDATE_STREAMER_NOTIFICATIONS/,
+  'Sidebar activity tracker should expose per-streamer live, title, and cafe notification controls'
+);
+
+assert.match(
   sidebarHtml,
   /id="activityMonitorToggleBtn"[\s\S]*id="activityIntervalInput"[\s\S]*id="activityNotifyLiveStartInput"[\s\S]*id="activityNotifyTitleInput"[\s\S]*id="activityNotifyCafeInput"/,
   'Sidebar activity tracker should expose monitoring interval and notification settings in the extension UI'
@@ -178,6 +184,12 @@ assert.match(
   sidebarJs,
   /ACTIVITY_SAVE_SETTINGS[\s\S]*normalizeActivitySettings/,
   'Sidebar activity settings should save through the background and re-render normalized state'
+);
+
+assert.match(
+  sidebarCss,
+  /\.activity-notification-controls\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(44px, 1fr\)\);/,
+  'Per-streamer notification toggles should fit inside the compact Chrome popup manager'
 );
 
 console.log('sidebar control size regression passed');

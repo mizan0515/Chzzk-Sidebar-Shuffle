@@ -122,6 +122,8 @@ async function handleActivityMessage(message) {
       return removeActivityStreamer(message.id);
     case 'ACTIVITY_TOGGLE_STREAMER':
       return toggleActivityStreamer(message.id, message.enabled);
+    case 'ACTIVITY_UPDATE_STREAMER_NOTIFICATIONS':
+      return updateActivityStreamerNotifications(message.id, message.notifications || {});
     case 'ACTIVITY_RUN_NOW':
       return runActivityCheck('manual');
     default:
@@ -234,6 +236,31 @@ async function toggleActivityStreamer(id, enabled) {
   return { ok: true, streamers };
 }
 
+async function updateActivityStreamerNotifications(id, notifications) {
+  const state = await getActivityState();
+  const streamers = state.streamers.map((item) => {
+    if (item.id !== id && item.channelId !== id) return item;
+    return {
+      ...item,
+      notifications: normalizeStreamerNotificationSettings({
+        ...(item.notifications || {}),
+        ...(notifications || {})
+      })
+    };
+  });
+  await storageSet({ [ACTIVITY_KEYS.streamers]: streamers });
+  return { ok: true, streamers };
+}
+
+function normalizeStreamerNotificationSettings(value) {
+  const settings = value && typeof value === 'object' ? value : {};
+  return {
+    liveStart: settings.liveStart !== false,
+    titleChange: settings.titleChange !== false,
+    cafePosts: settings.cafePosts !== false
+  };
+}
+
 async function addActivityEvents(events) {
   if (!events?.length) return [];
   const state = await getActivityState();
@@ -284,8 +311,8 @@ async function runActivityCheck(reason = 'manual') {
       const current = core.normalizeChzzkLiveStatus(live, streamer.channelId);
       const previous = previousStates[streamer.channelId];
       const events = core.detectChzzkEvents(previous, current, {
-        notifyLiveStart: state.settings?.notifyLiveStart,
-        notifyTitleChange: state.settings?.notifyTitleChange,
+        notifyLiveStart: state.settings?.notifyLiveStart !== false && streamer.notifications?.liveStart !== false,
+        notifyTitleChange: state.settings?.notifyTitleChange !== false && streamer.notifications?.titleChange !== false,
         profileImageUrl: streamer.profileImageUrl
       });
       nextStates[streamer.channelId] = current;
@@ -330,7 +357,12 @@ async function checkCafeActivity(state) {
   if (state.settings?.notifyCafePosts === false || !core?.selectNewCafeArticles) {
     return { checked: 0, events: [] };
   }
-  const cafeUnits = (state.streamers || []).filter(unit => unit.enabled !== false && unit.cafe?.cafeName && unit.cafe?.nickname);
+  const cafeUnits = (state.streamers || []).filter(unit =>
+    unit.enabled !== false &&
+    unit.notifications?.cafePosts !== false &&
+    unit.cafe?.cafeName &&
+    unit.cafe?.nickname
+  );
   if (!cafeUnits.length) return { checked: 0, events: [] };
 
   const stored = await storageGet([ACTIVITY_KEYS.cafeLastSeen, ACTIVITY_KEYS.cafeCursors, ACTIVITY_KEYS.streamers]);

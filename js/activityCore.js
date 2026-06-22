@@ -233,9 +233,19 @@
         cafe: hasCafe
           ? { cafeName, cafeId: normalizeText(data.cafeId), cafeRealName: normalizeText(data.cafeRealName), nickname }
           : null,
+        notifications: normalizeStreamerNotifications(data.notifications),
         enabled: data.enabled !== false,
         createdAt: nowIso()
       }
+    };
+  }
+
+  function normalizeStreamerNotifications(value) {
+    const settings = value && typeof value === "object" ? value : {};
+    return {
+      liveStart: settings.liveStart !== false,
+      titleChange: settings.titleChange !== false,
+      cafePosts: settings.cafePosts !== false
     };
   }
 
@@ -270,6 +280,7 @@
           profileImageUrl: normalizeText(item.profileImageUrl),
           channelId: item.channelId || null,
           cafe: item.cafe || null,
+          notifications: normalizeStreamerNotifications(item.notifications),
           enabled: item.enabled !== false,
           createdAt: item.createdAt || nowIso()
         };
@@ -282,6 +293,7 @@
         profileImageUrl: normalizeText(item.profileImageUrl),
         channelId: item.channelId || null,
         cafe: null,
+        notifications: normalizeStreamerNotifications(item.notifications),
         enabled: item.enabled !== false,
         createdAt: item.createdAt || nowIso()
       });
@@ -311,6 +323,7 @@
         profileImageUrl: normalizeText(sub.profileImageUrl),
         channelId: null,
         cafe,
+        notifications: normalizeStreamerNotifications(sub.notifications),
         enabled: sub.enabled !== false,
         createdAt: sub.createdAt || nowIso()
       });
@@ -328,6 +341,7 @@
     makeId,
     migrateToStreamerUnits,
     normalizeChzzkLiveStatus,
+    normalizeStreamerNotifications,
     normalizeText,
     nowIso,
     selectNewCafeArticles

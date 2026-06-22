@@ -12,6 +12,11 @@ async function main() {
         channelId: '0123456789abcdef0123456789abcdef',
         cafe: null,
         enabled: true,
+        notifications: {
+          liveStart: false,
+          titleChange: true,
+          cafePosts: true
+        },
         profileImageUrl: 'https://example.test/alpha.png'
       },
       {
@@ -25,6 +30,11 @@ async function main() {
           nickname: 'AlphaWriter'
         },
         enabled: true,
+        notifications: {
+          liveStart: true,
+          titleChange: true,
+          cafePosts: false
+        },
         createdAt: '2026-06-20T00:00:00.000Z',
         profileImageUrl: 'https://example.test/cafe.png'
       }
@@ -176,16 +186,23 @@ async function main() {
   assert.equal(settingsResponse.settings.notifyTitleChange, false);
   assert.ok(createdAlarms.some(item => item.action === 'create' && item.options.periodInMinutes === 7));
 
+  const streamerSettingsResponse = await context.handleActivityMessage({
+    type: 'ACTIVITY_UPDATE_STREAMER_NOTIFICATIONS',
+    id: 'alpha-unit',
+    notifications: { liveStart: true }
+  });
+  assert.equal(streamerSettingsResponse.ok, true);
+  assert.equal(storage.satChzzkStreamers[0].notifications.liveStart, true);
+
   const runResponse = await context.handleActivityMessage({ type: 'ACTIVITY_RUN_NOW' });
   assert.equal(runResponse.ok, true);
-  assert.equal(runResponse.checked, 2);
+  assert.equal(runResponse.checked, 1);
   assert.equal(runResponse.settings.intervalMinutes, 7);
-  assert.equal(notifications.length, 2);
+  assert.equal(notifications.length, 1);
   assert.match(notifications[0].id, /^live_0123456789abcdef0123456789abcdef_/);
-  assert.match(notifications[1].id, /^cafe_alpha-cafe_10_/);
-  assert.equal(storage.satEvents.length, 2);
-  assert.equal(storage.satCafeCursors['123456'], '10');
-  assert.deepEqual(JSON.parse(JSON.stringify(storage.satCafeLastSeen['alpha-cafe:AlphaWriter'])), ['10']);
+  assert.equal(storage.satEvents.length, 1);
+  assert.equal(storage.satCafeCursors['123456'], '9');
+  assert.deepEqual(JSON.parse(JSON.stringify(storage.satCafeLastSeen['alpha-cafe:AlphaWriter'])), []);
   assert.equal(storage.satLastRun.reason, 'manual');
   assert.equal(openedTabs.length, 0, 'Activity checks and notification creation must not open tabs automatically');
 
