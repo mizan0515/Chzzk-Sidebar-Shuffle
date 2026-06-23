@@ -1,4 +1,8 @@
 const assert = require('node:assert/strict');
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
+
+const moreButtonJs = readFileSync(join(__dirname, '..', 'js', 'moreButton.js'), 'utf8');
 
 class FakeButton {
   constructor({ className = '', text = '', ariaExpanded = 'false', inLnb = true }) {
@@ -93,5 +97,23 @@ assert.equal(manager.findExpandButton(), lnbButton);
 assert.equal(manager.autoExpand('test'), true);
 assert.equal(lnbButton.clicked, true);
 assert.equal(chatButton.clicked, false);
+
+assert.match(
+  moreButtonJs,
+  /this\.autoTimeouts = new Set\(\);/,
+  'Auto-expand initial timers should be owned by the manager'
+);
+
+assert.match(
+  moreButtonJs,
+  /const scheduleAttempt = \(reason, delay\) => \{[\s\S]*this\.autoTimeouts\.add\(timer\);[\s\S]*scheduleAttempt\('initial-300ms', 300\);[\s\S]*scheduleAttempt\('initial-1000ms', 1000\);[\s\S]*scheduleAttempt\('initial-2500ms', 2500\);/,
+  'Initial auto-expand attempts should be scheduled through a cancellable helper'
+);
+
+assert.match(
+  moreButtonJs,
+  /stopAutoExpand\(\) \{[\s\S]*this\.autoTimeouts\.forEach\(timer => clearTimeout\(timer\)\);[\s\S]*this\.autoTimeouts\.clear\(\);[\s\S]*clearInterval\(this\.autoTimer\);/,
+  'Stopping auto-expand should cancel pending initial attempts and the polling interval'
+);
 
 console.log('more button regression passed');

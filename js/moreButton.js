@@ -15,6 +15,7 @@ class MoreButtonManager {
     this.expandCallbacks = new Set();
     this.autoObserver = null;
     this.autoTimer = null;
+    this.autoTimeouts = new Set();
     this.lastAutoExpandAt = 0;
     this.lastExpandedHref = '';
   }
@@ -204,10 +205,17 @@ class MoreButtonManager {
   startAutoExpand() {
     this.stopAutoExpand();
     const attempt = (reason) => this.autoExpand(reason);
+    const scheduleAttempt = (reason, delay) => {
+      const timer = setTimeout(() => {
+        this.autoTimeouts.delete(timer);
+        attempt(reason);
+      }, delay);
+      this.autoTimeouts.add(timer);
+    };
 
-    setTimeout(() => attempt('initial-300ms'), 300);
-    setTimeout(() => attempt('initial-1000ms'), 1000);
-    setTimeout(() => attempt('initial-2500ms'), 2500);
+    scheduleAttempt('initial-300ms', 300);
+    scheduleAttempt('initial-1000ms', 1000);
+    scheduleAttempt('initial-2500ms', 2500);
 
     this.autoObserver = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
@@ -227,6 +235,8 @@ class MoreButtonManager {
   }
 
   stopAutoExpand() {
+    this.autoTimeouts.forEach(timer => clearTimeout(timer));
+    this.autoTimeouts.clear();
     if (this.autoObserver) {
       this.autoObserver.disconnect();
       this.autoObserver = null;
