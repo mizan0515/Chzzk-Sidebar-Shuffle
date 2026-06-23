@@ -33,6 +33,18 @@ assert.match(
 
 assert.match(
   sidebarJs,
+  /dragAutoScrollDelta = delta;[\s\S]*window\.scrollBy\(\{ top: dragAutoScrollDelta/,
+  'Drag auto-scroll should update direction and speed on each dragover instead of keeping a stale timer delta'
+);
+
+assert.match(
+  sidebarJs,
+  /function stopDragAutoScroll\(\)[\s\S]*dragAutoScrollDelta = 0;/,
+  'Stopping drag auto-scroll should clear the last scroll delta'
+);
+
+assert.match(
+  sidebarJs,
   /tierButtons\(activeTierId\)[\s\S]*data-tier-choice/,
   'Tier chips should remain as the non-drag fallback for assigning an off-screen tier'
 );

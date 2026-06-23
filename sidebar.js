@@ -55,6 +55,7 @@ let pageStatus = {};
 let reinjectedTabIds = new Set();
 let isWorking = false;
 let dragAutoScrollTimer = null;
+let dragAutoScrollDelta = 0;
 let activityState = { streamers: [], events: [], states: {}, settings: defaultActivitySettings(), lastRun: null };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -719,6 +720,7 @@ function scheduleDragAutoScroll(event) {
     event.clientY,
     window.innerHeight || document.documentElement.clientHeight
   );
+  dragAutoScrollDelta = delta;
   if (!delta) {
     stopDragAutoScroll();
     return;
@@ -726,7 +728,7 @@ function scheduleDragAutoScroll(event) {
 
   if (dragAutoScrollTimer) return;
   dragAutoScrollTimer = window.setInterval(() => {
-    window.scrollBy({ top: delta, left: 0, behavior: 'auto' });
+    window.scrollBy({ top: dragAutoScrollDelta, left: 0, behavior: 'auto' });
   }, 50);
 }
 
@@ -734,6 +736,7 @@ function stopDragAutoScroll() {
   if (!dragAutoScrollTimer) return;
   window.clearInterval(dragAutoScrollTimer);
   dragAutoScrollTimer = null;
+  dragAutoScrollDelta = 0;
 }
 
 function activitySummaryText(streamer, liveState) {
