@@ -2020,7 +2020,10 @@
     const core = window.ChzzkTimecodeCore;
     const video = document.querySelector('video');
     const seconds = video ? Math.floor(video.currentTime || 0) : 0;
-    const text = core?.buildCopyText ? core.buildCopyText({ seconds, videoNo: core.getVideoNo?.(location.href) || '' }) : `- [${new Date(seconds * 1000).toISOString().slice(11, 19)}] `;
+    const videoNo = core?.getVideoNo?.(location.href) || '';
+    const text = core?.buildCopyText
+      ? core.buildCopyText({ seconds, videoNo, format: videoNo ? core.FORMAT_VOD : core.FORMAT_CONTEXT })
+      : `- [${new Date(seconds * 1000).toISOString().slice(11, 19)}] `;
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
     } else {
