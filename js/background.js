@@ -22,9 +22,11 @@ const ACTIVITY_KEYS = {
   schemaVersion: 'satSchemaVersion',
   cafeSubscriptions: 'satCafeSubscriptions',
   cafeLastSeen: 'satCafeLastSeen',
-  cafeCursors: 'satCafeCursors'
+  cafeCursors: 'satCafeCursors',
+  cafeRecovery: 'satCafeRecovery'
 };
 const ACTIVITY_SCHEMA_VERSION = 2;
+const CAFE_RECOVERY_VERSION = 1;
 const CAFE_PAGE_SIZE = 50;
 const CAFE_CATCHUP_PAGES = 2;
 const CAFE_HEADER_RULE_ID = 9001;
@@ -469,19 +471,36 @@ async function checkCafeActivity(state) {
   );
   if (!cafeUnits.length) return { checked: 0, events: [] };
 
-  const stored = await storageGet([ACTIVITY_KEYS.cafeLastSeen, ACTIVITY_KEYS.cafeCursors, ACTIVITY_KEYS.streamers]);
+  const stored = await storageGet([
+    ACTIVITY_KEYS.cafeLastSeen,
+    ACTIVITY_KEYS.cafeCursors,
+    ACTIVITY_KEYS.cafeRecovery,
+    ACTIVITY_KEYS.streamers
+  ]);
   const lastSeen = stored?.[ACTIVITY_KEYS.cafeLastSeen] || {};
   const cafeCursors = stored?.[ACTIVITY_KEYS.cafeCursors] || {};
+  const cafeRecovery = stored?.[ACTIVITY_KEYS.cafeRecovery] || {};
   const streamers = Array.isArray(stored?.[ACTIVITY_KEYS.streamers]) ? stored[ACTIVITY_KEYS.streamers] : state.streamers;
   const nextSeen = { ...lastSeen };
   const nextCursors = { ...cafeCursors };
+  const nextRecovery = {
+    version: CAFE_RECOVERY_VERSION,
+    done: cafeRecovery.version === CAFE_RECOVERY_VERSION && cafeRecovery.done ? { ...cafeRecovery.done } : {}
+  };
   const nextStreamers = streamers.map(unit => ({ ...unit, cafe: unit.cafe ? { ...unit.cafe } : null }));
   const events = [];
   const fetchedByCafe = new Map();
+  const recentByCafe = new Map();
   let checked = 0;
+  let recoveryChanged = cafeRecovery.version !== CAFE_RECOVERY_VERSION;
 
   for (const unit of nextStreamers) {
-    if (unit.enabled === false || !unit.cafe?.cafeName || !unit.cafe?.nickname) continue;
+    if (
+      unit.enabled === false ||
+      unit.notifications?.cafePosts === false ||
+      !unit.cafe?.cafeName ||
+      !unit.cafe?.nickname
+    ) continue;
     const cafe = unit.cafe;
     if (!cafe.cafeId) {
       const info = await resolveCafeInfo(cafe.cafeName);
@@ -501,19 +520,41 @@ async function checkCafeActivity(state) {
     const emitted = core.selectNewCafeArticles(matched, nextSeen[seenKey], unit.createdAt, 5, {
       alreadyOnlyNew: !!cafeCursors[cursorKey]
     });
+    const emittedIds = new Set(emitted.map(article => article.articleId).filter(Boolean));
     nextSeen[seenKey] = matched.map(article => article.articleId);
     for (const article of emitted) {
       const event = await notifyCafeArticle(unit, cafe, article);
       events.push(event);
     }
+    const recoveryKey = `${unit.id || seenKey}:${cursorKey}:${cafe.nickname}`;
+    if (!nextRecovery.done[recoveryKey]) {
+      let recoveryArticle = matched[0];
+      if (!recoveryArticle) {
+        if (!recentByCafe.has(cursorKey)) {
+          recentByCafe.set(cursorKey, fetchCafeRecentArticles(cafe, CAFE_CATCHUP_PAGES));
+        }
+        const recentResult = await recentByCafe.get(cursorKey);
+        recoveryArticle = recentResult.articles
+          .map(normalizeCafeArticle)
+          .find(article => article.articleId && article.author === cafe.nickname);
+      }
+      if (recoveryArticle && !emittedIds.has(recoveryArticle.articleId)) {
+        const event = await notifyCafeArticle(unit, cafe, recoveryArticle);
+        events.push(event);
+      }
+      nextRecovery.done[recoveryKey] = new Date().toISOString();
+      recoveryChanged = true;
+    }
     checked += 1;
   }
 
-  await storageSet({
+  const writes = {
     [ACTIVITY_KEYS.cafeLastSeen]: nextSeen,
     [ACTIVITY_KEYS.cafeCursors]: nextCursors,
     [ACTIVITY_KEYS.streamers]: nextStreamers
-  });
+  };
+  if (recoveryChanged) writes[ACTIVITY_KEYS.cafeRecovery] = nextRecovery;
+  await storageSet(writes);
   return { checked, events };
 }
 
@@ -550,6 +591,23 @@ async function fetchCafeArticlesSince(cafe, lastNewestArticleId) {
       articles.push(article);
     }
     if (content.hasNext === false) break;
+  }
+  return { articles, newestArticleId };
+}
+
+async function fetchCafeRecentArticles(cafe, pageLimit) {
+  const articles = [];
+  let newestArticleId = '';
+  const maxPages = Math.max(1, Math.min(CAFE_CATCHUP_PAGES, Number(pageLimit) || 1));
+  for (let page = 1; page <= maxPages; page += 1) {
+    const content = await fetchCafeArticlePage(cafe, page);
+    const pageArticles = content.articleList || content.articles || [];
+    if (!pageArticles.length) break;
+    if (!newestArticleId) {
+      newestArticleId = normalizeText(pageArticles[0].articleId || pageArticles[0].id || pageArticles[0].articleNo);
+    }
+    articles.push(...pageArticles);
+    if (content.hasNext === false || pageArticles.length < CAFE_PAGE_SIZE) break;
   }
   return { articles, newestArticleId };
 }

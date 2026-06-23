@@ -50,6 +50,25 @@ async function main() {
           cafePosts: true
         },
         profileImageUrl: ''
+      },
+      {
+        id: 'recovery-cafe-unit',
+        name: 'Recovery Cafe',
+        channelId: null,
+        cafe: {
+          cafeName: 'recovery-cafe',
+          cafeId: '987654',
+          cafeRealName: 'Recovery Cafe',
+          nickname: 'RecoveryWriter'
+        },
+        enabled: true,
+        notifications: {
+          liveStart: true,
+          titleChange: true,
+          cafePosts: true
+        },
+        createdAt: '2026-06-18T00:00:00.000Z',
+        profileImageUrl: 'https://example.test/recovery.png'
       }
     ],
     satCafeSubscriptions: [
@@ -80,7 +99,10 @@ async function main() {
       notifyCafePosts: true
     },
     satCafeCursors: { '123456': '9' },
-    satCafeLastSeen: { 'alpha-cafe:AlphaWriter': [] }
+    satCafeLastSeen: {
+      'alpha-cafe:AlphaWriter': [],
+      'recovery-cafe:RecoveryWriter': ['42']
+    }
   };
   const createdAlarms = [];
   const notifications = [];
@@ -130,7 +152,33 @@ async function main() {
           })
         };
       }
+      if (text.includes('cafe.naver.com/legacy-cafe')) {
+        return {
+          ok: true,
+          text: async () => '<html><head><title>Legacy Cafe : 네이버 카페</title></head><body>"clubId": 555555</body></html>'
+        };
+      }
       if (text.includes('ArticleListV2.json')) {
+        if (text.includes('search.clubid=987654')) {
+          return {
+            ok: true,
+            json: async () => ({
+              message: {
+                result: {
+                  hasNext: false,
+                  articleList: [
+                    {
+                      articleId: 42,
+                      writerNickname: 'RecoveryWriter',
+                      subject: 'Recovered cafe post',
+                      writeDateTimestamp: Date.now()
+                    }
+                  ]
+                }
+              }
+            })
+          };
+        }
         return {
           ok: true,
           json: async () => ({
@@ -283,13 +331,24 @@ async function main() {
     1,
     'Cafe identity should be unique by cafe name and nickname'
   );
+  assert.equal(
+    storage.satChzzkStreamers.find(unit => unit.id === 'cafe-unit').notifications.cafePosts,
+    false,
+    'Existing per-streamer cafe notification disables should survive unrelated background updates'
+  );
+  assert.equal(
+    storage.satChzzkStreamers.find(unit => unit.cafe?.cafeName === 'legacy-cafe').notifications.cafePosts,
+    false,
+    'Duplicate cafe upsert should not re-enable a disabled cafe notification'
+  );
 
   const runResponse = await context.handleActivityMessage({ type: 'ACTIVITY_RUN_NOW' });
   assert.equal(runResponse.ok, true);
-  assert.equal(runResponse.checked, 2);
+  assert.equal(runResponse.checked, 3, JSON.stringify(runResponse.lastRun?.errors || []));
   assert.equal(runResponse.settings.intervalMinutes, 7);
-  assert.equal(notifications.length, 1);
+  assert.equal(notifications.length, 2);
   assert.match(notifications[0].id, /^live_0123456789abcdef0123456789abcdef_/);
+  assert.match(notifications[1].id, /^cafe_recovery-cafe_42_/);
   assert.equal(runResponse.states['ffffffffffffffffffffffffffffffff'].isLive, false);
   assert.equal(runResponse.states['ffffffffffffffffffffffffffffffff'].channelName, 'Offline Alpha');
   assert.equal(runResponse.states['ffffffffffffffffffffffffffffffff'].error, undefined);
@@ -298,11 +357,25 @@ async function main() {
     'https://example.test/offline-profile.png',
     'Offline CHZZK activity channels should seed a profile image without becoming live'
   );
-  assert.equal(storage.satEvents.length, 1);
+  assert.equal(storage.satEvents.length, 2);
+  assert.equal(storage.satCafeRecovery.version, 1);
+  assert.ok(
+    Object.keys(storage.satCafeRecovery.done).some(key => key.includes('recovery-cafe-unit:987654:RecoveryWriter')),
+    'Cafe recovery should mark a recovered writer so the same old article is not alerted repeatedly'
+  );
   assert.equal(storage.satCafeCursors['123456'], '9');
   assert.deepEqual(JSON.parse(JSON.stringify(storage.satCafeLastSeen['alpha-cafe:AlphaWriter'])), []);
   assert.equal(storage.satLastRun.reason, 'manual');
   assert.equal(openedTabs.length, 0, 'Activity checks and notification creation must not open tabs automatically');
+
+  const notificationCountAfterRecovery = notifications.length;
+  const secondRunResponse = await context.handleActivityMessage({ type: 'ACTIVITY_RUN_NOW' });
+  assert.equal(secondRunResponse.ok, true);
+  assert.equal(
+    notifications.length,
+    notificationCountAfterRecovery,
+    'Cafe recovery should not alert the same recovered article on later checks'
+  );
 
   await notificationClickListener(notifications[0].id);
   await new Promise(resolve => setTimeout(resolve, 0));
