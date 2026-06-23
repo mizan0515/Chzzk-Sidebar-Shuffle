@@ -40,6 +40,8 @@ assert.match(buildScript, /removeUnsupportedBrowserArtifacts/, 'Build script sho
 assert.doesNotMatch(validateScript, /validateManifest\('whale'\)|sidebar_action\.default_page|Whale manifest/i, 'Validation must not require a Whale manifest');
 assert.doesNotMatch(completionGuard, /whale_isolated|Chrome\/Whale|Main Whale/i, 'Completion guard must not require Whale evidence');
 assert.doesNotMatch(completionGuard, /chromium_isolated|isolated QA are complete/i, 'Completion guard must not require or reward isolated Chromium evidence');
+assert.doesNotMatch(completionGuard, /manager-only follow-up|manager-only\/hard-external/i, 'Completion guard must not classify missing Chrome real-use evidence as manager-only by default');
+assert.match(completionGuard, /Keep the PR Draft[\s\S]*manager-visible Chrome is foreground[\s\S]*real extension action popup internals by label/, 'Completion guard should preserve the bounded Chrome retry condition when main evidence is unverified');
 assert.match(completionGuard, /validation\.main_chrome\s*\|\|\s*validation\.main_browser/, 'Completion guard should read the Chrome-specific real-use evidence field');
 assert.match(completionGuard, /UNVERIFIED\|NOT_READY\|blocked/, 'Completion guard should classify UNVERIFIED_* values as scoped non-release states');
 assert.doesNotMatch(readinessScript, /Start-MainChromeQa|qa:main:chrome:plan|qa:main:chrome:start|restart with remote debugging/i, 'Readiness output must not route managers to separate Chrome profile launch helpers');
