@@ -212,8 +212,8 @@ assert.doesNotMatch(
 
 assert.match(
   sidebarJs,
-  /function isSafeActivityEventUrl\(value\)[\s\S]*url\.protocol !== 'https:'[\s\S]*host === 'chzzk\.naver\.com'[\s\S]*host === 'cafe\.naver\.com'/,
-  'Activity event link safety should allow only HTTPS CHZZK and Naver Cafe destinations'
+  /function isSafeActivityEventUrl\(value\)[\s\S]*url\.protocol !== 'https:'[\s\S]*host === 'chzzk\.naver\.com'[\s\S]*host === 'cafe\.naver\.com'[\s\S]*host\.endsWith\('\.cafe\.naver\.com'\)/,
+  'Activity event link safety should allow only HTTPS CHZZK and Naver Cafe destinations, including Naver Cafe subdomains'
 );
 
 assert.match(
