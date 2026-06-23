@@ -200,14 +200,20 @@ assert.match(
 
 assert.match(
   sidebarJs,
-  /event\.url[\s\S]*href="\$\{escapeAttr\(event\.url\)\}"[\s\S]*aria-disabled="true"/,
-  'Activity event rows without URLs should render inert text instead of a blank # tab link'
+  /isSafeActivityEventUrl\(event\.url\)[\s\S]*href="\$\{escapeAttr\(event\.url\)\}"[\s\S]*aria-disabled="true"/,
+  'Activity event rows should render clickable links only for safe CHZZK/Naver Cafe URLs'
 );
 
 assert.doesNotMatch(
   sidebarJs,
   /event\.url \|\| '#'/,
   'Activity event rows must not use # as a URL fallback in the Chrome popup'
+);
+
+assert.match(
+  sidebarJs,
+  /function isSafeActivityEventUrl\(value\)[\s\S]*url\.protocol !== 'https:'[\s\S]*host === 'chzzk\.naver\.com'[\s\S]*host === 'cafe\.naver\.com'/,
+  'Activity event link safety should allow only HTTPS CHZZK and Naver Cafe destinations'
 );
 
 assert.match(

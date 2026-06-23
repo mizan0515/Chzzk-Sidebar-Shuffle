@@ -725,7 +725,7 @@ function renderActivity() {
       <strong>${escapeText(event.title || '새 활동')}</strong>
       <span>${escapeText(event.message || event.createdAt || '')}</span>
     `;
-    const eventLink = event.url
+    const eventLink = isSafeActivityEventUrl(event.url)
       ? `<a class="activity-event-link" href="${escapeAttr(event.url)}" target="_blank" rel="noreferrer">${eventContent}</a>`
       : `<div class="activity-event-link" aria-disabled="true">${eventContent}</div>`;
     item.innerHTML = `
@@ -800,6 +800,19 @@ function normalizeActivitySettings(value) {
   settings.disableLiveChatInput = settings.disableLiveChatInput === true;
   settings.disableLiveDonationButtons = settings.disableLiveDonationButtons === true;
   return settings;
+}
+
+function isSafeActivityEventUrl(value) {
+  try {
+    const url = new URL(String(value || ''));
+    if (url.protocol !== 'https:') return false;
+    const host = url.hostname.toLowerCase();
+    return host === 'chzzk.naver.com' ||
+      host === 'cafe.naver.com' ||
+      host.endsWith('.cafe.naver.com');
+  } catch {
+    return false;
+  }
 }
 
 async function updateActivitySettings(settings) {
