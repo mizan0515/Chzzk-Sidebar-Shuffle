@@ -27,6 +27,12 @@ assert.match(
 
 assert.match(
   sidebarJs,
+  /card\.addEventListener\('dragend'[\s\S]*draggedId = null;[\s\S]*stopDragAutoScroll\(\);[\s\S]*drop-before[\s\S]*drop-after/,
+  'Canceled drags should clear drag state, stop auto-scroll, and remove drop indicators'
+);
+
+assert.match(
+  sidebarJs,
   /function scheduleDragAutoScroll\(event\)[\s\S]*computeAutoScrollDelta[\s\S]*window\.scrollBy/,
   'Dragging near the popup edge should auto-scroll so off-screen tiers remain reachable'
 );

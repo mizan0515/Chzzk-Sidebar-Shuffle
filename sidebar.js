@@ -522,6 +522,13 @@ function createCard(channel, tierId, draggable, action = 'remove') {
     draggedId = channel.id;
   });
 
+  card.addEventListener('dragend', () => {
+    draggedId = null;
+    stopDragAutoScroll();
+    document.querySelectorAll('.drop-zone.drag-over, .streamer-card.drop-before, .streamer-card.drop-after')
+      .forEach(element => element.classList.remove('drag-over', 'drop-before', 'drop-after'));
+  });
+
   card.querySelector('.mini').addEventListener('click', async () => {
     await runExclusive(action === 'add' ? '즐겨찾기에 추가하는 중입니다.' : '즐겨찾기에서 제거하는 중입니다.', async () => {
       await store.setStarred(channel.id, action === 'add', channel);
