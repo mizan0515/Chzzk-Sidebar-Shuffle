@@ -291,6 +291,8 @@ async function main() {
   assert.equal(settingsResponse.ok, true);
   assert.equal(settingsResponse.settings.intervalMinutes, 7);
   assert.equal(settingsResponse.settings.notifyTitleChange, false);
+  assert.equal(settingsResponse.settings.disableLiveChatInput, false);
+  assert.equal(settingsResponse.settings.disableLiveDonationButtons, false);
   assert.ok(createdAlarms.some(item => item.action === 'create' && item.options.periodInMinutes === 7));
   assert.equal(storage.satSchemaVersion, 2);
   assert.ok(
@@ -358,6 +360,15 @@ async function main() {
     'Offline CHZZK activity channels should seed a profile image without becoming live'
   );
   assert.equal(storage.satEvents.length, 2);
+  const removedEventId = storage.satEvents[0].id;
+  const removeEventResponse = await context.handleActivityMessage({ type: 'ACTIVITY_REMOVE_EVENT', id: removedEventId });
+  assert.equal(removeEventResponse.ok, true);
+  assert.equal(removeEventResponse.events.some(event => event.id === removedEventId), false);
+  assert.equal(storage.satEvents.some(event => event.id === removedEventId), false);
+  storage.satEvents.unshift({
+    id: notifications[0].id,
+    url: 'https://chzzk.naver.com/live/0123456789abcdef0123456789abcdef'
+  });
   assert.equal(storage.satCafeRecovery.version, 1);
   assert.ok(
     Object.keys(storage.satCafeRecovery.done).some(key => key.includes('recovery-cafe-unit:987654:RecoveryWriter')),

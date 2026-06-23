@@ -175,6 +175,12 @@ assert.match(
 );
 
 assert.match(
+  sidebarHtml,
+  /id="activityDisableLiveChatInput"[\s\S]*id="activityDisableDonationInput"/,
+  'Sidebar activity tracker should expose live-page safety controls from the integrated tracker'
+);
+
+assert.match(
   sidebarJs,
   /activityMonitorToggleBtn[\s\S]*updateActivitySettings/,
   'Sidebar activity monitor toggle should be wired to settings updates'
@@ -187,9 +193,21 @@ assert.match(
 );
 
 assert.match(
+  sidebarJs,
+  /data-activity-event-remove[\s\S]*removeActivityEvent[\s\S]*ACTIVITY_REMOVE_EVENT/,
+  'Sidebar activity tracker should let users remove individual recent activity records'
+);
+
+assert.match(
   sidebarCss,
   /\.activity-notification-controls\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(44px, 1fr\)\);/,
   'Per-streamer notification toggles should fit inside the compact Chrome popup manager'
+);
+
+assert.match(
+  sidebarCss,
+  /\.activity-event-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/,
+  'Activity event rows should keep the open link and delete action inside the compact Chrome popup manager'
 );
 
 console.log('sidebar control size regression passed');

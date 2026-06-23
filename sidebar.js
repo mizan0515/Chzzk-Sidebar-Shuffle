@@ -42,6 +42,8 @@ const els = {
   activityNotifyLiveStartInput: document.getElementById('activityNotifyLiveStartInput'),
   activityNotifyTitleInput: document.getElementById('activityNotifyTitleInput'),
   activityNotifyCafeInput: document.getElementById('activityNotifyCafeInput'),
+  activityDisableLiveChatInput: document.getElementById('activityDisableLiveChatInput'),
+  activityDisableDonationInput: document.getElementById('activityDisableDonationInput'),
   activityList: document.getElementById('activityList'),
   activityCount: document.getElementById('activityCount')
 };
@@ -149,6 +151,12 @@ function bindEvents() {
   }));
   els.activityNotifyCafeInput?.addEventListener('change', () => updateActivitySettings({
     notifyCafePosts: !!els.activityNotifyCafeInput.checked
+  }));
+  els.activityDisableLiveChatInput?.addEventListener('change', () => updateActivitySettings({
+    disableLiveChatInput: !!els.activityDisableLiveChatInput.checked
+  }));
+  els.activityDisableDonationInput?.addEventListener('change', () => updateActivitySettings({
+    disableLiveDonationButtons: !!els.activityDisableDonationInput.checked
   }));
 }
 
@@ -674,6 +682,8 @@ function renderActivity() {
   if (els.activityNotifyLiveStartInput) els.activityNotifyLiveStartInput.checked = settings.notifyLiveStart !== false;
   if (els.activityNotifyTitleInput) els.activityNotifyTitleInput.checked = settings.notifyTitleChange !== false;
   if (els.activityNotifyCafeInput) els.activityNotifyCafeInput.checked = settings.notifyCafePosts !== false;
+  if (els.activityDisableLiveChatInput) els.activityDisableLiveChatInput.checked = settings.disableLiveChatInput === true;
+  if (els.activityDisableDonationInput) els.activityDisableDonationInput.checked = settings.disableLiveDonationButtons === true;
   els.activityList.textContent = '';
   if (!streamers.length && !events.length) {
     els.activityList.appendChild(emptyNode('추적 채널 없음'));
@@ -709,15 +719,16 @@ function renderActivity() {
     els.activityList.appendChild(item);
   });
   events.slice(0, 5).forEach((event) => {
-    const item = document.createElement('a');
-    item.className = 'activity-item';
-    item.href = event.url || '#';
-    item.target = '_blank';
-    item.rel = 'noreferrer';
+    const item = document.createElement('div');
+    item.className = 'activity-item activity-event-row';
     item.innerHTML = `
-      <strong>${escapeText(event.title || '새 활동')}</strong>
-      <span>${escapeText(event.message || event.createdAt || '')}</span>
+      <a class="activity-event-link" href="${escapeAttr(event.url || '#')}" target="_blank" rel="noreferrer">
+        <strong>${escapeText(event.title || '새 활동')}</strong>
+        <span>${escapeText(event.message || event.createdAt || '')}</span>
+      </a>
+      <button class="tiny danger-text" type="button" data-activity-event-remove="${escapeAttr(event.id || '')}">삭제</button>
     `;
+    item.querySelector('[data-activity-event-remove]')?.addEventListener('click', () => removeActivityEvent(event.id));
     els.activityList.appendChild(item);
   });
 }
@@ -769,7 +780,9 @@ function defaultActivitySettings() {
     isMonitoring: true,
     notifyLiveStart: true,
     notifyTitleChange: true,
-    notifyCafePosts: true
+    notifyCafePosts: true,
+    disableLiveChatInput: false,
+    disableLiveDonationButtons: false
   };
 }
 
@@ -780,6 +793,8 @@ function normalizeActivitySettings(value) {
   settings.notifyLiveStart = settings.notifyLiveStart !== false;
   settings.notifyTitleChange = settings.notifyTitleChange !== false;
   settings.notifyCafePosts = settings.notifyCafePosts !== false;
+  settings.disableLiveChatInput = settings.disableLiveChatInput === true;
+  settings.disableLiveDonationButtons = settings.disableLiveDonationButtons === true;
   return settings;
 }
 
@@ -835,6 +850,23 @@ async function removeActivityStreamer(id) {
       return false;
     }
     await loadActivityState();
+    render();
+    return true;
+  });
+}
+
+async function removeActivityEvent(id) {
+  if (!id) return;
+  await runExclusive('활동 기록을 삭제하는 중입니다.', async () => {
+    const response = await platform.sendRuntimeMessage?.({ type: 'ACTIVITY_REMOVE_EVENT', id }).catch(error => ({ ok: false, error: error.message || String(error) }));
+    if (!response?.ok) {
+      els.connectionText.textContent = '활동 기록을 삭제하지 못했습니다.';
+      return false;
+    }
+    activityState = {
+      ...activityState,
+      events: response.events || []
+    };
     render();
     return true;
   });

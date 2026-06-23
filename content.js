@@ -18,6 +18,247 @@
     lnbElementsPresent: true,
     preservedShuffleState: null
   };
+  const LIVE_SAFETY_DEFAULTS = {
+    disableLiveChatInput: false,
+    disableLiveDonationButtons: false
+  };
+  let liveSafetySettings = { ...LIVE_SAFETY_DEFAULTS };
+  let liveSafetyObserver = null;
+  let liveSafetyTimer = null;
+  let liveSafetyStorageListener = null;
+
+  function initializeLiveSafetyControls() {
+    if (typeof window.__chzzkLiveSafetyCleanup === 'function') {
+      window.__chzzkLiveSafetyCleanup();
+    }
+
+    liveSafetyStorageListener = (changes, areaName) => {
+      if (areaName !== 'local' || !changes?.satSettings) return;
+      updateLiveSafetySettings(changes.satSettings.newValue || {});
+    };
+
+    window.__chzzkLiveSafetyCleanup = () => {
+      stopLiveSafetyControls();
+      window.chrome?.storage?.onChanged?.removeListener?.(liveSafetyStorageListener);
+      liveSafetyStorageListener = null;
+      restoreLiveSafetyControls();
+    };
+
+    readLiveSafetySettings();
+    startLiveSafetyControls();
+    window.chrome?.storage?.onChanged?.addListener?.(liveSafetyStorageListener);
+  }
+
+  function readLiveSafetySettings() {
+    const storage = window.chrome?.storage?.local;
+    if (!storage?.get) return;
+    storage.get(['satSettings'], (result) => {
+      if (window.chrome?.runtime?.lastError) return;
+      updateLiveSafetySettings(result?.satSettings || {});
+    });
+  }
+
+  function updateLiveSafetySettings(settings) {
+    liveSafetySettings = {
+      ...LIVE_SAFETY_DEFAULTS,
+      ...(settings || {}),
+      disableLiveChatInput: settings?.disableLiveChatInput === true,
+      disableLiveDonationButtons: settings?.disableLiveDonationButtons === true
+    };
+    applyLiveSafetyControls();
+  }
+
+  function startLiveSafetyControls() {
+    stopLiveSafetyControls();
+    liveSafetyObserver = new MutationObserver(() => applyLiveSafetyControls());
+    liveSafetyObserver.observe(document.documentElement, { childList: true, subtree: true });
+    liveSafetyTimer = window.setInterval(applyLiveSafetyControls, 1000);
+    document.addEventListener('keydown', onLiveSafetyInputEvent, true);
+    document.addEventListener('beforeinput', onLiveSafetyInputEvent, true);
+    document.addEventListener('input', onLiveSafetyInputEvent, true);
+    document.addEventListener('click', onLiveSafetyClick, true);
+  }
+
+  function stopLiveSafetyControls() {
+    liveSafetyObserver?.disconnect();
+    liveSafetyObserver = null;
+    if (liveSafetyTimer) {
+      window.clearInterval(liveSafetyTimer);
+      liveSafetyTimer = null;
+    }
+    document.removeEventListener('keydown', onLiveSafetyInputEvent, true);
+    document.removeEventListener('beforeinput', onLiveSafetyInputEvent, true);
+    document.removeEventListener('input', onLiveSafetyInputEvent, true);
+    document.removeEventListener('click', onLiveSafetyClick, true);
+  }
+
+  function isLiveSafetySupportedPage() {
+    return window.location.hostname === 'chzzk.naver.com' &&
+      window.location.pathname.startsWith('/live/');
+  }
+
+  function applyLiveSafetyControls() {
+    if (!isLiveSafetySupportedPage()) {
+      restoreLiveSafetyControls();
+      return;
+    }
+
+    const blockChat = liveSafetySettings.disableLiveChatInput === true;
+    const blockDonation = liveSafetySettings.disableLiveDonationButtons === true;
+    for (const input of findLiveChatInputs()) {
+      setLiveInputBlocked(input, blockChat);
+    }
+    for (const button of findLiveChatSendButtons()) {
+      setLiveElementHidden(button, blockChat);
+      if (blockChat) {
+        button.disabled = true;
+        button.setAttribute('aria-disabled', 'true');
+      }
+    }
+    for (const element of findLiveDonationElements()) {
+      setLiveElementHidden(element, blockDonation);
+      if (blockDonation && 'disabled' in element) {
+        element.disabled = true;
+        element.setAttribute('aria-disabled', 'true');
+      }
+    }
+  }
+
+  function restoreLiveSafetyControls() {
+    document.querySelectorAll('[data-chzzk-live-safety-hidden], [data-chzzk-live-safety-input], [data-chzzk-live-safety-disabled]')
+      .forEach((element) => {
+        if (element.dataset.chzzkLiveSafetyInput === 'true') {
+          restoreLiveInput(element);
+        }
+        setLiveElementHidden(element, false);
+        if (element.dataset.chzzkLiveSafetyDisabled === 'true' && 'disabled' in element) {
+          element.disabled = element.dataset.chzzkLiveSafetyWasDisabled === 'true';
+          if (element.dataset.chzzkLiveSafetyHadAriaDisabled === 'true') {
+            element.setAttribute('aria-disabled', element.dataset.chzzkLiveSafetyAriaDisabled || 'true');
+          } else {
+            element.removeAttribute('aria-disabled');
+          }
+          delete element.dataset.chzzkLiveSafetyDisabled;
+        }
+      });
+  }
+
+  function findLiveChatInputs() {
+    return Array.from(document.querySelectorAll([
+      'textarea[class*="live_chatting_input_input"]',
+      'textarea[placeholder*="채팅"]',
+      '[contenteditable="true"][class*="chat"]'
+    ].join(',')));
+  }
+
+  function findLiveChatSendButtons() {
+    return uniqueElements([
+      ...document.querySelectorAll('#send_chat_or_donate'),
+      ...document.querySelectorAll('button[class*="live_chatting_input_send_button"]')
+    ]).filter((element) => element instanceof HTMLButtonElement);
+  }
+
+  function findLiveDonationElements() {
+    const elements = [
+      ...document.querySelectorAll('[class*="live_chatting_input_donation"]'),
+      ...Array.from(document.querySelectorAll('button')).filter((button) => (button.textContent || '').includes('후원'))
+    ];
+    return uniqueElements(elements)
+      .map((element) => element.closest('[class*="live_chatting_input_donation"]') || element)
+      .filter((element) => element && element !== document.body && element !== document.documentElement);
+  }
+
+  function uniqueElements(elements) {
+    return Array.from(new Set(elements.filter(Boolean)));
+  }
+
+  function setLiveInputBlocked(input, blocked) {
+    if (blocked) {
+      if (input.dataset.chzzkLiveSafetyInput !== 'true') {
+        input.dataset.chzzkLiveSafetyInput = 'true';
+        input.dataset.chzzkLiveSafetyWasDisabled = String(!!input.disabled);
+        input.dataset.chzzkLiveSafetyWasReadOnly = String(!!input.readOnly);
+        input.dataset.chzzkLiveSafetyPlaceholder = input.getAttribute('placeholder') || '';
+        input.dataset.chzzkLiveSafetyHadPlaceholder = String(input.hasAttribute('placeholder'));
+      }
+      input.disabled = true;
+      input.readOnly = true;
+      input.setAttribute('aria-disabled', 'true');
+      input.setAttribute('placeholder', '확장 설정에서 채팅 입력을 막아두었습니다.');
+      if ('value' in input) input.value = '';
+      return;
+    }
+    restoreLiveInput(input);
+  }
+
+  function restoreLiveInput(input) {
+    if (input.dataset.chzzkLiveSafetyInput !== 'true') return;
+    input.disabled = input.dataset.chzzkLiveSafetyWasDisabled === 'true';
+    input.readOnly = input.dataset.chzzkLiveSafetyWasReadOnly === 'true';
+    if (input.dataset.chzzkLiveSafetyHadPlaceholder === 'true') {
+      input.setAttribute('placeholder', input.dataset.chzzkLiveSafetyPlaceholder || '');
+    } else {
+      input.removeAttribute('placeholder');
+    }
+    input.removeAttribute('aria-disabled');
+    delete input.dataset.chzzkLiveSafetyInput;
+  }
+
+  function setLiveElementHidden(element, hidden) {
+    if (!element) return;
+    if (hidden) {
+      if (element.dataset.chzzkLiveSafetyHidden !== 'true') {
+        element.dataset.chzzkLiveSafetyHidden = 'true';
+        element.dataset.chzzkLiveSafetyDisplay = element.style.display || '';
+        if ('disabled' in element) {
+          element.dataset.chzzkLiveSafetyDisabled = 'true';
+          element.dataset.chzzkLiveSafetyWasDisabled = String(!!element.disabled);
+          element.dataset.chzzkLiveSafetyHadAriaDisabled = String(element.hasAttribute('aria-disabled'));
+          element.dataset.chzzkLiveSafetyAriaDisabled = element.getAttribute('aria-disabled') || '';
+        }
+      }
+      element.style.display = 'none';
+      element.setAttribute('aria-hidden', 'true');
+      return;
+    }
+    if (element.dataset.chzzkLiveSafetyHidden === 'true') {
+      element.style.display = element.dataset.chzzkLiveSafetyDisplay || '';
+      element.removeAttribute('aria-hidden');
+      delete element.dataset.chzzkLiveSafetyHidden;
+    }
+    if (element.dataset.chzzkLiveSafetyDisabled === 'true' && 'disabled' in element) {
+      element.disabled = element.dataset.chzzkLiveSafetyWasDisabled === 'true';
+      if (element.dataset.chzzkLiveSafetyHadAriaDisabled === 'true') {
+        element.setAttribute('aria-disabled', element.dataset.chzzkLiveSafetyAriaDisabled || 'true');
+      } else {
+        element.removeAttribute('aria-disabled');
+      }
+      delete element.dataset.chzzkLiveSafetyDisabled;
+    }
+  }
+
+  function onLiveSafetyInputEvent(event) {
+    if (!liveSafetySettings.disableLiveChatInput || !isLiveSafetySupportedPage()) return;
+    if (event.target?.closest?.('textarea[class*="live_chatting_input_input"], textarea[placeholder*="채팅"], [contenteditable="true"][class*="chat"]')) {
+      event.preventDefault();
+      event.stopPropagation();
+      const input = event.target.closest('textarea, input, [contenteditable="true"]');
+      if (input && 'value' in input) input.value = '';
+    }
+  }
+
+  function onLiveSafetyClick(event) {
+    if (!isLiveSafetySupportedPage()) return;
+    if (liveSafetySettings.disableLiveChatInput && event.target.closest?.('#send_chat_or_donate, button[class*="live_chatting_input_send_button"]')) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (liveSafetySettings.disableLiveDonationButtons && event.target.closest?.('[class*="live_chatting_input_donation"]')) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
 
   // 페이지 타입 감지 (모든 치지직 페이지 지원)
   function getCurrentPageType() {
@@ -1956,6 +2197,8 @@
       }
     }
   }
+
+  initializeLiveSafetyControls();
 
   // 초기화 실행
   if (document.readyState === 'loading') {

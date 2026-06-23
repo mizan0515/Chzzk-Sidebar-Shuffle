@@ -11,7 +11,9 @@ const DEFAULT_ACTIVITY_SETTINGS = {
   isMonitoring: true,
   notifyLiveStart: true,
   notifyTitleChange: true,
-  notifyCafePosts: true
+  notifyCafePosts: true,
+  disableLiveChatInput: false,
+  disableLiveDonationButtons: false
 };
 const ACTIVITY_KEYS = {
   streamers: 'satChzzkStreamers',
@@ -125,6 +127,8 @@ async function handleActivityMessage(message) {
       return addActivityStreamer(message.input || {});
     case 'ACTIVITY_REMOVE_STREAMER':
       return removeActivityStreamer(message.id);
+    case 'ACTIVITY_REMOVE_EVENT':
+      return removeActivityEvent(message.id);
     case 'ACTIVITY_TOGGLE_STREAMER':
       return toggleActivityStreamer(message.id, message.enabled);
     case 'ACTIVITY_UPDATE_STREAMER_NOTIFICATIONS':
@@ -181,6 +185,8 @@ function normalizeActivitySettings(value) {
   settings.notifyLiveStart = settings.notifyLiveStart !== false;
   settings.notifyTitleChange = settings.notifyTitleChange !== false;
   settings.notifyCafePosts = settings.notifyCafePosts !== false;
+  settings.disableLiveChatInput = settings.disableLiveChatInput === true;
+  settings.disableLiveDonationButtons = settings.disableLiveDonationButtons === true;
   return settings;
 }
 
@@ -253,6 +259,13 @@ async function removeActivityStreamer(id) {
   const streamers = state.streamers.filter(item => item.id !== id && item.channelId !== id);
   await storageSet({ [ACTIVITY_KEYS.streamers]: streamers });
   return { ok: true, streamers };
+}
+
+async function removeActivityEvent(id) {
+  const state = await getActivityState();
+  const events = (state.events || []).filter(item => item.id !== id);
+  await storageSet({ [ACTIVITY_KEYS.events]: events });
+  return { ok: true, events };
 }
 
 async function toggleActivityStreamer(id, enabled) {
