@@ -356,7 +356,21 @@ function isSameActivityUnit(left, right) {
   if (left.channelId && right.channelId && left.channelId === right.channelId) return true;
   const leftCafe = activityCafeKey(left);
   const rightCafe = activityCafeKey(right);
-  return !!leftCafe && leftCafe === rightCafe;
+  if (leftCafe && leftCafe === rightCafe) return true;
+  return shouldMergeComplementaryActivityUnit(left, right);
+}
+
+function shouldMergeComplementaryActivityUnit(left, right) {
+  const leftName = normalizeText(left.name).toLowerCase();
+  const rightName = normalizeText(right.name).toLowerCase();
+  if (!leftName || leftName !== rightName) return false;
+
+  const leftHasChannel = !!left.channelId;
+  const rightHasChannel = !!right.channelId;
+  const leftHasCafe = !!activityCafeKey(left);
+  const rightHasCafe = !!activityCafeKey(right);
+  return (leftHasChannel && !leftHasCafe && !rightHasChannel && rightHasCafe) ||
+    (!leftHasChannel && leftHasCafe && rightHasChannel && !rightHasCafe);
 }
 
 function activityCafeKey(unit) {

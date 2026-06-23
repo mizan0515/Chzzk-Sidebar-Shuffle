@@ -402,6 +402,29 @@ async function main() {
   assert.equal(stoppedResponse.settings.isMonitoring, false);
   assert.equal(createdAlarms.at(-1).action, 'clear');
 
+  const beforeComplementaryAddCount = storage.satChzzkStreamers.length;
+  const complementaryChannelResponse = await context.handleActivityMessage({
+    type: 'ACTIVITY_ADD_STREAMER',
+    input: {
+      name: 'Cafe Alpha',
+      channel: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+    }
+  });
+  assert.equal(complementaryChannelResponse.ok, true, complementaryChannelResponse.error);
+  assert.equal(
+    storage.satChzzkStreamers.length,
+    beforeComplementaryAddCount,
+    'Adding a CHZZK channel with the same streamer name as a cafe-only row should link the existing unit, not duplicate it'
+  );
+  const mergedCafeUnit = storage.satChzzkStreamers.find(unit => unit.id === 'cafe-unit');
+  assert.equal(mergedCafeUnit.channelId, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee');
+  assert.equal(mergedCafeUnit.cafe.cafeName, 'alpha-cafe');
+  assert.equal(
+    mergedCafeUnit.notifications.cafePosts,
+    false,
+    'Linking a missing CHZZK channel should preserve existing cafe notification preferences'
+  );
+
   console.log('activity background monitoring regression passed');
 }
 
