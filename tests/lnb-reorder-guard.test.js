@@ -347,7 +347,7 @@ assert.deepEqual(channelOrder(tierShuffleList), ['tier-s2', 'tier-s1', 'tier-a2'
 assert.equal(tierShuffleCalls, 8);
 
 assert.equal(shuffle.applyTierSort({ shuffleWithinTiers: true, reason: 'mutation:new-channel-content' }), true);
-assert.deepEqual(channelOrder(tierShuffleList), ['tier-s1', 'tier-s2', 'tier-a1', 'tier-a2', 'tier-u1', 'tier-u2', 'tier-g1']);
+assert.deepEqual(channelOrder(tierShuffleList), ['tier-s2', 'tier-s1', 'tier-a2', 'tier-a1', 'tier-u2', 'tier-u1', 'tier-g1']);
 assert.equal(tierShuffleCalls, 8);
 
 assert.equal(shuffle.applyTierSort({ shuffleWithinTiers: true }), true);

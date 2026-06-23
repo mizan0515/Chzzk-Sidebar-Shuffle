@@ -1031,6 +1031,9 @@ class ShuffleManager {
       const autoShuffleSignature = this.getAutoTierShuffleSignature(containers, options);
       const effectiveShuffleWithinTiers = shuffleWithinTiers &&
         (!autoShuffleSignature || autoShuffleSignature !== this.lastAutoTierShuffleSignature);
+      const preserveCurrentGroupOrder = shuffleWithinTiers &&
+        !!autoShuffleSignature &&
+        autoShuffleSignature === this.lastAutoTierShuffleSignature;
 
       const pinned = [];
       const eligibleContainers = containers.filter((item) => {
@@ -1053,6 +1056,9 @@ class ShuffleManager {
 
       groups.forEach((group) => {
         group.sort((a, b) => {
+          if (preserveCurrentGroupOrder) {
+            return a.originalIndex - b.originalIndex;
+          }
           if (a.tierId || b.tierId) {
             const tierDelta = a.tierOrder - b.tierOrder;
             if (tierDelta) return tierDelta;
