@@ -726,7 +726,7 @@ function renderActivity() {
       <span>${escapeText(event.message || event.createdAt || '')}</span>
     `;
     const eventLink = isSafeActivityEventUrl(event.url)
-      ? `<a class="activity-event-link" href="${escapeAttr(event.url)}" target="_blank" rel="noreferrer">${eventContent}</a>`
+      ? `<a class="activity-event-link" href="${escapeAttr(event.url)}" target="_blank" rel="noopener noreferrer">${eventContent}</a>`
       : `<div class="activity-event-link" aria-disabled="true">${eventContent}</div>`;
     item.innerHTML = `
       ${eventLink}

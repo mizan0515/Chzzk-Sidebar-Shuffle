@@ -200,7 +200,7 @@ assert.match(
 
 assert.match(
   sidebarJs,
-  /isSafeActivityEventUrl\(event\.url\)[\s\S]*href="\$\{escapeAttr\(event\.url\)\}"[\s\S]*aria-disabled="true"/,
+  /isSafeActivityEventUrl\(event\.url\)[\s\S]*href="\$\{escapeAttr\(event\.url\)\}"[\s\S]*rel="noopener noreferrer"[\s\S]*aria-disabled="true"/,
   'Activity event rows should render clickable links only for safe CHZZK/Naver Cafe URLs'
 );
 

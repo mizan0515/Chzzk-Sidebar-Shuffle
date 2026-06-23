@@ -10,6 +10,7 @@ const validateScript = readFileSync(join(__dirname, '..', 'scripts', 'validate.m
 const completionGuard = readFileSync(join(__dirname, '..', 'scripts', 'check-completion-guard.mjs'), 'utf8');
 const readinessScript = readFileSync(join(__dirname, '..', 'scripts', 'check-main-browser-readiness.mjs'), 'utf8');
 const browserQaCleanupScript = readFileSync(join(__dirname, '..', 'scripts', 'Stop-BrowserQaSessions.ps1'), 'utf8');
+const popupHtml = readFileSync(join(__dirname, '..', 'popup.html'), 'utf8');
 const popupJs = readFileSync(join(__dirname, '..', 'popup.js'), 'utf8');
 const storeAssetGenerator = readFileSync(join(__dirname, '..', 'scripts', 'generate-store-assets.mjs'), 'utf8');
 const storeListingCopy = readFileSync(join(__dirname, '..', 'store-assets', 'listing-copy.ko.md'), 'utf8');
@@ -50,6 +51,8 @@ assert.match(readinessScript, /Computer Use/, 'Readiness output should route una
 assert.doesNotMatch(readinessScript, /ask the manager to .*provide|provide\/enable a controllable Chrome plugin|enable a controllable Chrome plugin/i, 'Readiness output must keep browser tooling retry conditions agent-owned');
 assert.match(readinessScript, /Keep PR #5 Draft[\s\S]*manager-visible Chrome is foreground[\s\S]*real extension action popup internals by label/, 'Readiness output should preserve the bounded Chrome real-use retry condition');
 assert.doesNotMatch(browserQaCleanupScript, /whale|Whale|WHALE|9223/, 'Browser QA cleanup must not target Whale or old Whale QA ports in Chrome-only scope');
+assert.doesNotMatch(popupHtml, /target="_blank"\s+rel="noreferrer"/, 'Chrome popup external links should explicitly include noopener');
+assert.match(popupHtml, /target="_blank"\s+rel="noopener noreferrer"/, 'Chrome popup external links should prevent opener access');
 assert.doesNotMatch(popupJs, /showWhaleSidebar|sidebarAction\.show|platform\?\.isWhale\(\)/, 'Popup tier manager must not leave Chrome popup flow for Whale sidebar');
 
 [
