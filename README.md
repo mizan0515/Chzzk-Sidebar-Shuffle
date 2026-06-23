@@ -101,7 +101,7 @@ npm run qa:main:chrome:popup
 npm run guard:completion
 ```
 
-This requires static validation, Chrome build, isolated Chromium regression QA, and main logged-in Chrome real-use evidence.
+This requires static validation, Chrome build, repository regression tests, and main logged-in Chrome real-use evidence.
 
 If main Chrome cannot be attached in the current session, the scoped guard may be used only with an explicit final report saying the real-use evidence is still unverified:
 

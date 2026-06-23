@@ -9,6 +9,7 @@ const buildScript = readFileSync(join(__dirname, '..', 'scripts', 'build.mjs'), 
 const validateScript = readFileSync(join(__dirname, '..', 'scripts', 'validate.mjs'), 'utf8');
 const completionGuard = readFileSync(join(__dirname, '..', 'scripts', 'check-completion-guard.mjs'), 'utf8');
 const readinessScript = readFileSync(join(__dirname, '..', 'scripts', 'check-main-browser-readiness.mjs'), 'utf8');
+const browserQaCleanupScript = readFileSync(join(__dirname, '..', 'scripts', 'Stop-BrowserQaSessions.ps1'), 'utf8');
 const popupJs = readFileSync(join(__dirname, '..', 'popup.js'), 'utf8');
 const storeAssetGenerator = readFileSync(join(__dirname, '..', 'scripts', 'generate-store-assets.mjs'), 'utf8');
 const mainChromePopupQa = readFileSync(join(__dirname, '..', 'scripts', 'qa-main-chrome-popup.mjs'), 'utf8');
@@ -28,6 +29,7 @@ assert.match(buildScript, /default_title:\s*'CHZZK Favorites & Tiers'/, 'Built C
 
 assert.match(readme, /Chrome-only/i, 'README should state the Chrome-only product scope');
 assert.doesNotMatch(readme, /build:whale|qa:whale:isolated|qa:main:whale|dist\/whale|Whale Store/i, 'README must not instruct managers to build, QA, or release Whale');
+assert.doesNotMatch(readme, /requires static validation, Chrome build, isolated Chromium/i, 'README completion gate must not make isolated Chromium part of Chrome-only release readiness');
 
 assert.match(buildScript, /target === 'all' \? \['chrome'\]/, 'build:all should build only Chrome');
 assert.doesNotMatch(buildScript, /manifest\.sidebar_action\s*=|default_page|sidebar_action\s*=/i, 'Build script must not create a Whale sidebar package');
@@ -40,6 +42,7 @@ assert.match(completionGuard, /validation\.main_chrome\s*\|\|\s*validation\.main
 assert.match(completionGuard, /UNVERIFIED\|NOT_READY\|blocked/, 'Completion guard should classify UNVERIFIED_* values as scoped non-release states');
 assert.doesNotMatch(readinessScript, /Start-MainChromeQa|qa:main:chrome:plan|qa:main:chrome:start|restart with remote debugging/i, 'Readiness output must not route managers to separate Chrome profile launch helpers');
 assert.match(readinessScript, /Computer Use/, 'Readiness output should route unavailable CDP cases to manager-visible Computer Use evidence');
+assert.doesNotMatch(browserQaCleanupScript, /whale|Whale|WHALE|9223/, 'Browser QA cleanup must not target Whale or old Whale QA ports in Chrome-only scope');
 assert.doesNotMatch(popupJs, /showWhaleSidebar|sidebarAction\.show|platform\?\.isWhale\(\)/, 'Popup tier manager must not leave Chrome popup flow for Whale sidebar');
 
 [

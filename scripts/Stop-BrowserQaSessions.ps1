@@ -7,15 +7,12 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $runStateDir = Join-Path $repoRoot '.runtime\browser-qa'
 $chromeQaProfile = Join-Path $runStateDir 'chrome-profile'
-$whaleQaProfile = Join-Path $runStateDir 'whale-profile'
 $qaMirrorRoot = Join-Path $env:TEMP 'chzzk-sidebar-shuffler-browser-qa'
 $extensionRoots = @(
   (Join-Path $repoRoot 'dist\chrome'),
-  (Join-Path $repoRoot 'dist\whale'),
-  (Join-Path $qaMirrorRoot 'chrome-extension'),
-  (Join-Path $qaMirrorRoot 'whale-extension')
+  (Join-Path $qaMirrorRoot 'chrome-extension')
 )
-$ports = @(9222, 9223)
+$ports = @(9222)
 
 function ConvertTo-JsonLine($Value) {
   $Value | ConvertTo-Json -Depth 8 -Compress
@@ -48,7 +45,7 @@ function Get-QaBrowserProcesses {
   }
 
   Get-CimInstance Win32_Process |
-    Where-Object { $_.Name -ieq 'chrome.exe' -or $_.Name -ieq 'whale.exe' } |
+    Where-Object { $_.Name -ieq 'chrome.exe' } |
     ForEach-Object {
       $commandLine = [string]$_.CommandLine
       $matchesPort = $false
@@ -64,7 +61,7 @@ function Get-QaBrowserProcesses {
         }
       }
       $matchesRunState = $runPidSet.ContainsKey([int]$_.ProcessId)
-      $matchesQaProfile = $commandLine -like "*$chromeQaProfile*" -or $commandLine -like "*$whaleQaProfile*"
+      $matchesQaProfile = $commandLine -like "*$chromeQaProfile*"
       if ($matchesPort -or $matchesExtension -or $matchesRunState -or $matchesQaProfile) {
         [pscustomobject]@{
           pid = $_.ProcessId
