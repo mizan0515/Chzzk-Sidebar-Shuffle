@@ -39,6 +39,16 @@ async function main() {
         profileImageUrl: 'https://example.test/cafe.png'
       }
     ],
+    satCafeSubscriptions: [
+      {
+        id: 'legacy-cafe',
+        name: 'Legacy Cafe',
+        cafeName: 'legacy-cafe',
+        nickname: 'LegacyWriter',
+        notifications: { cafePosts: false },
+        createdAt: '2026-06-19T00:00:00.000Z'
+      }
+    ],
     satChzzkStates: {
       '0123456789abcdef0123456789abcdef': {
         channelId: '0123456789abcdef0123456789abcdef',
@@ -69,6 +79,7 @@ async function main() {
     console,
     setTimeout,
     clearTimeout,
+    URL,
     fetch: async (url) => {
       const text = String(url);
       if (text.includes('ArticleListV2.json')) {
@@ -185,6 +196,16 @@ async function main() {
   assert.equal(settingsResponse.settings.intervalMinutes, 7);
   assert.equal(settingsResponse.settings.notifyTitleChange, false);
   assert.ok(createdAlarms.some(item => item.action === 'create' && item.options.periodInMinutes === 7));
+  assert.equal(storage.satSchemaVersion, 2);
+  assert.ok(
+    storage.satChzzkStreamers.some(unit => unit.cafe?.cafeName === 'legacy-cafe' && unit.cafe?.nickname === 'LegacyWriter'),
+    'Legacy cafe subscriptions should migrate into unified activity units'
+  );
+  assert.equal(
+    storage.satChzzkStreamers.find(unit => unit.cafe?.cafeName === 'legacy-cafe').notifications.cafePosts,
+    false,
+    'Legacy cafe notification preferences should survive migration'
+  );
 
   const streamerSettingsResponse = await context.handleActivityMessage({
     type: 'ACTIVITY_UPDATE_STREAMER_NOTIFICATIONS',
@@ -193,6 +214,27 @@ async function main() {
   });
   assert.equal(streamerSettingsResponse.ok, true);
   assert.equal(storage.satChzzkStreamers[0].notifications.liveStart, true);
+
+  const beforeDuplicateAddCount = storage.satChzzkStreamers.length;
+  const duplicateCafeResponse = await context.handleActivityMessage({
+    type: 'ACTIVITY_ADD_STREAMER',
+    input: {
+      name: 'Legacy Cafe Updated',
+      cafe: 'https://cafe.naver.com/legacy-cafe',
+      nickname: 'LegacyWriter'
+    }
+  });
+  assert.equal(duplicateCafeResponse.ok, true, duplicateCafeResponse.error);
+  assert.equal(
+    storage.satChzzkStreamers.length,
+    beforeDuplicateAddCount,
+    'Adding an existing cafe-only activity tracker row should update in place, not duplicate it'
+  );
+  assert.equal(
+    storage.satChzzkStreamers.filter(unit => unit.cafe?.cafeName === 'legacy-cafe' && unit.cafe?.nickname === 'LegacyWriter').length,
+    1,
+    'Cafe identity should be unique by cafe name and nickname'
+  );
 
   const runResponse = await context.handleActivityMessage({ type: 'ACTIVITY_RUN_NOW' });
   assert.equal(runResponse.ok, true);

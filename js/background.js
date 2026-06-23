@@ -19,9 +19,12 @@ const ACTIVITY_KEYS = {
   events: 'satEvents',
   settings: 'satSettings',
   lastRun: 'satLastRun',
+  schemaVersion: 'satSchemaVersion',
+  cafeSubscriptions: 'satCafeSubscriptions',
   cafeLastSeen: 'satCafeLastSeen',
   cafeCursors: 'satCafeCursors'
 };
+const ACTIVITY_SCHEMA_VERSION = 2;
 const CAFE_PAGE_SIZE = 50;
 const CAFE_CATCHUP_PAGES = 2;
 const CAFE_HEADER_RULE_ID = 9001;
@@ -132,6 +135,7 @@ async function handleActivityMessage(message) {
 }
 
 async function getActivityState() {
+  await migrateActivityStateIfNeeded();
   const result = await storageGet([
     ACTIVITY_KEYS.streamers,
     ACTIVITY_KEYS.states,
@@ -146,6 +150,26 @@ async function getActivityState() {
     settings: normalizeActivitySettings(result?.[ACTIVITY_KEYS.settings]),
     lastRun: result?.[ACTIVITY_KEYS.lastRun] || null
   };
+}
+
+async function migrateActivityStateIfNeeded() {
+  const core = globalThis.StreamerActivityCore;
+  if (!core?.migrateToStreamerUnits) return;
+  const result = await storageGet([
+    ACTIVITY_KEYS.schemaVersion,
+    ACTIVITY_KEYS.streamers,
+    ACTIVITY_KEYS.cafeSubscriptions
+  ]);
+  const version = Number(result?.[ACTIVITY_KEYS.schemaVersion]) || 0;
+  if (version >= ACTIVITY_SCHEMA_VERSION) return;
+
+  const streamers = Array.isArray(result?.[ACTIVITY_KEYS.streamers]) ? result[ACTIVITY_KEYS.streamers] : [];
+  const cafeSubscriptions = Array.isArray(result?.[ACTIVITY_KEYS.cafeSubscriptions]) ? result[ACTIVITY_KEYS.cafeSubscriptions] : [];
+  const migrated = dedupeActivityUnits(core.migrateToStreamerUnits(streamers, cafeSubscriptions));
+  await storageSet({
+    [ACTIVITY_KEYS.streamers]: migrated,
+    [ACTIVITY_KEYS.schemaVersion]: ACTIVITY_SCHEMA_VERSION
+  });
 }
 
 function normalizeActivitySettings(value) {
@@ -214,8 +238,7 @@ async function addActivityStreamer(input) {
   const built = core.buildStreamerUnit(input);
   if (!built.ok) return { ok: false, error: built.error };
   const state = await getActivityState();
-  const existing = state.streamers.filter(item => item.channelId !== built.unit.channelId || !built.unit.channelId);
-  const streamers = [...existing, built.unit];
+  const streamers = upsertActivityUnit(state.streamers, built.unit);
   await storageSet({ [ACTIVITY_KEYS.streamers]: streamers });
   return { ok: true, streamers };
 }
@@ -259,6 +282,69 @@ function normalizeStreamerNotificationSettings(value) {
     titleChange: settings.titleChange !== false,
     cafePosts: settings.cafePosts !== false
   };
+}
+
+function upsertActivityUnit(units, unit) {
+  const next = [];
+  let merged = null;
+  for (const item of units || []) {
+    if (isSameActivityUnit(item, unit)) {
+      merged = mergeActivityUnit(item, merged || unit);
+      continue;
+    }
+    next.push(item);
+  }
+  next.push(merged || unit);
+  return dedupeActivityUnits(next);
+}
+
+function dedupeActivityUnits(units) {
+  return (units || []).reduce((next, unit) => upsertActivityUnitNoRecurse(next, unit), []);
+}
+
+function upsertActivityUnitNoRecurse(units, unit) {
+  const next = [];
+  let merged = null;
+  for (const item of units || []) {
+    if (isSameActivityUnit(item, unit)) {
+      merged = mergeActivityUnit(item, merged || unit);
+      continue;
+    }
+    next.push(item);
+  }
+  next.push(merged || unit);
+  return next;
+}
+
+function mergeActivityUnit(existing, incoming) {
+  return {
+    ...existing,
+    ...incoming,
+    id: existing.id || incoming.id,
+    createdAt: existing.createdAt || incoming.createdAt,
+    channelId: incoming.channelId || existing.channelId || null,
+    cafe: incoming.cafe || existing.cafe || null,
+    profileImageUrl: incoming.profileImageUrl || existing.profileImageUrl || '',
+    enabled: incoming.enabled !== false && existing.enabled !== false,
+    notifications: normalizeStreamerNotificationSettings({
+      ...(incoming.notifications || {}),
+      ...(existing.notifications || {})
+    })
+  };
+}
+
+function isSameActivityUnit(left, right) {
+  if (!left || !right) return false;
+  if (left.channelId && right.channelId && left.channelId === right.channelId) return true;
+  const leftCafe = activityCafeKey(left);
+  const rightCafe = activityCafeKey(right);
+  return !!leftCafe && leftCafe === rightCafe;
+}
+
+function activityCafeKey(unit) {
+  const cafeName = normalizeText(unit?.cafe?.cafeName).toLowerCase();
+  const nickname = normalizeText(unit?.cafe?.nickname).toLowerCase();
+  return cafeName && nickname ? `${cafeName}:${nickname}` : '';
 }
 
 async function addActivityEvents(events) {
