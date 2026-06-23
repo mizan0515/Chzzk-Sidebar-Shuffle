@@ -9,6 +9,9 @@ let viewerCountDebounceTimer = null;
 let masterViewerCountTimer = null;
 let lastViewerCountState = null;
 let globalViewerObserver = null;
+let viewerRouteCleanupRegistered = false;
+let viewerRouteOriginalPushState = null;
+let viewerRouteOriginalReplaceState = null;
 let processedElements = new WeakSet(); // 메모리 누수 방지
 
 /**
@@ -21,6 +24,10 @@ class ViewerCountManager {
     this.masterTimer = null;
     this.lastState = null;
     this.isEnabled = true;
+    this.liveMonitorInterval = null;
+    this.cardMonitorInterval = null;
+    this.liveBeforeUnloadCleanup = null;
+    this.cardBeforeUnloadCleanup = null;
     
     // CSS 스타일 주입
     this.injectCSS();
@@ -2211,6 +2218,7 @@ class ViewerCountManager {
     if (globalViewerObserver) {
       globalViewerObserver.disconnect();
     }
+    this.stopRouteScopedMonitoring();
 
     window.ChzzkLogger?.info('🔧 [MONITOR] Starting enhanced real-time monitoring system...');
 
@@ -2283,8 +2291,34 @@ class ViewerCountManager {
 
     // 카드 뷰 전용 모니터링 시작
     this.startCardViewMonitoring();
+    this.ensureRouteCleanup();
 
     window.ChzzkLogger?.info('✅ [MONITOR] Enhanced monitoring system activated');
+  }
+
+  ensureRouteCleanup() {
+    if (viewerRouteCleanupRegistered || typeof history === 'undefined') {
+      return;
+    }
+    viewerRouteOriginalPushState = history.pushState;
+    viewerRouteOriginalReplaceState = history.replaceState;
+
+    history.pushState = function(...args) {
+      window.ChzzkViewerCount?.stopRouteScopedMonitoring?.();
+      return viewerRouteOriginalPushState.apply(this, args);
+    };
+
+    history.replaceState = function(...args) {
+      window.ChzzkViewerCount?.stopRouteScopedMonitoring?.();
+      return viewerRouteOriginalReplaceState.apply(this, args);
+    };
+
+    viewerRouteCleanupRegistered = true;
+  }
+
+  stopRouteScopedMonitoring() {
+    this.stopLivePageIntensiveMonitoring();
+    this.stopCardViewMonitoring();
   }
 
   /**
@@ -2356,9 +2390,10 @@ class ViewerCountManager {
    */
   startLivePageIntensiveMonitoring() {
     window.ChzzkLogger?.info('🎯 [LIVE] Starting intensive live page monitoring...');
-    
+    this.stopLivePageIntensiveMonitoring();
+
     // 0.5초마다 라이브 페이지 시청자 수 재검사
-    const liveMonitorInterval = setInterval(() => {
+    this.liveMonitorInterval = setInterval(() => {
       if (!window.ChzzkSettings?.get('hideViewerCount')) {
         return;
       }
@@ -2383,29 +2418,21 @@ class ViewerCountManager {
         window.ChzzkLogger?.info(`⚡ [LIVE-INTERVAL] Hidden ${hiddenInInterval} elements in interval scan`);
       }
     }, 500);
-    
-    // 페이지 이동 시 정리
-    const cleanup = () => {
-      clearInterval(liveMonitorInterval);
+
+    this.liveBeforeUnloadCleanup = () => this.stopLivePageIntensiveMonitoring();
+    window.addEventListener('beforeunload', this.liveBeforeUnloadCleanup, { once: true });
+  }
+
+  stopLivePageIntensiveMonitoring() {
+    if (this.liveMonitorInterval) {
+      clearInterval(this.liveMonitorInterval);
+      this.liveMonitorInterval = null;
       window.ChzzkLogger?.debug('🧹 [LIVE] Live page monitoring cleaned up');
-    };
-    
-    // 정리 함수 등록
-    window.addEventListener('beforeunload', cleanup, { once: true });
-    
-    // URL 변경 감지로 정리
-    const originalPushState = history.pushState;
-    const originalReplaceState = history.replaceState;
-    
-    history.pushState = function(...args) {
-      cleanup();
-      return originalPushState.apply(this, args);
-    };
-    
-    history.replaceState = function(...args) {
-      cleanup();
-      return originalReplaceState.apply(this, args);
-    };
+    }
+    if (this.liveBeforeUnloadCleanup) {
+      window.removeEventListener?.('beforeunload', this.liveBeforeUnloadCleanup);
+      this.liveBeforeUnloadCleanup = null;
+    }
   }
 
   /**
@@ -2414,52 +2441,30 @@ class ViewerCountManager {
    */
   startCardViewMonitoring() {
     window.ChzzkLogger?.info('📺 [CARD] Starting card view monitoring system...');
-    
+    this.stopCardViewMonitoring();
+
     // 카드 뷰 모니터링: 0.8초마다 전체 카드 스캔
-    const cardMonitorInterval = setInterval(() => {
+    this.cardMonitorInterval = setInterval(() => {
       if (!window.ChzzkSettings?.get('hideViewerCount')) {
         return;
       }
-      
+
       this.scanCardViewElements();
     }, 800);
-    
-    // 페이지 이동 시 정리
-    const cleanup = () => {
-      clearInterval(cardMonitorInterval);
+
+    this.cardBeforeUnloadCleanup = () => this.stopCardViewMonitoring();
+    window.addEventListener('beforeunload', this.cardBeforeUnloadCleanup, { once: true });
+  }
+
+  stopCardViewMonitoring() {
+    if (this.cardMonitorInterval) {
+      clearInterval(this.cardMonitorInterval);
+      this.cardMonitorInterval = null;
       window.ChzzkLogger?.debug('🧹 [CARD] Card view monitoring cleaned up');
-    };
-    
-    // 정리 함수 등록
-    window.addEventListener('beforeunload', cleanup, { once: true });
-    
-    // URL 변경 감지로 정리 (기존 코드와 충돌 방지)
-    if (!window._cardViewCleanupRegistered) {
-      const originalPushState = history.pushState;
-      const originalReplaceState = history.replaceState;
-      
-      const wrappedPushState = function(...args) {
-        cleanup();
-        return originalPushState.apply(this, args);
-      };
-      
-      const wrappedReplaceState = function(...args) {
-        cleanup();
-        return originalReplaceState.apply(this, args);
-      };
-      
-      // 여러 번 래핑 방지
-      if (!history.pushState._cardViewWrapped) {
-        history.pushState = wrappedPushState;
-        history.pushState._cardViewWrapped = true;
-      }
-      
-      if (!history.replaceState._cardViewWrapped) {
-        history.replaceState = wrappedReplaceState;
-        history.replaceState._cardViewWrapped = true;
-      }
-      
-      window._cardViewCleanupRegistered = true;
+    }
+    if (this.cardBeforeUnloadCleanup) {
+      window.removeEventListener?.('beforeunload', this.cardBeforeUnloadCleanup);
+      this.cardBeforeUnloadCleanup = null;
     }
   }
 
@@ -2845,6 +2850,7 @@ class ViewerCountManager {
         globalViewerObserver.disconnect();
         globalViewerObserver = null;
       }
+      this.stopRouteScopedMonitoring();
       this.showAll();
     }
     
@@ -2868,6 +2874,7 @@ class ViewerCountManager {
       globalViewerObserver.disconnect();
       globalViewerObserver = null;
     }
+    this.stopRouteScopedMonitoring();
     
     // 전역 상태 정리
     processedElements = new WeakSet();
