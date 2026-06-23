@@ -1295,9 +1295,25 @@ class ViewerCountManager {
    */
   isCriticalLayoutElement(element) {
     const tagName = element.tagName?.toLowerCase();
-    const className = (element.className && typeof element.className === 'string') ? 
-                     element.className.toLowerCase() : 
+    const className = (element.className && typeof element.className === 'string') ?
+                     element.className.toLowerCase() :
                      (element.className && element.className.baseVal ? element.className.baseVal.toLowerCase() : '');
+    const text = element.textContent?.trim() || '';
+
+    // Viewer-count badges often include "container" in their generated class
+    // names. Do not let broad layout-protection keywords block already-vetted
+    // count elements such as thumbnail_badge_container or _container_ hashes.
+    if (
+      this.isViewerCountPattern(text) &&
+      (
+        className.includes('thumbnail_badge_container') ||
+        className.includes('navigator_count') ||
+        className.includes('video_information_count') ||
+        (className.includes('_container_') && this.isLikelyChzzkViewerCountContainer(element))
+      )
+    ) {
+      return false;
+    }
 
     // 중요한 HTML 태그들
     const criticalTags = ['html', 'body', 'main', 'section', 'header', 'footer', 'nav', 'article'];
