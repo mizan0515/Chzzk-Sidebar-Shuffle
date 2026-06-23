@@ -721,11 +721,15 @@ function renderActivity() {
   events.slice(0, 5).forEach((event) => {
     const item = document.createElement('div');
     item.className = 'activity-item activity-event-row';
+    const eventContent = `
+      <strong>${escapeText(event.title || '새 활동')}</strong>
+      <span>${escapeText(event.message || event.createdAt || '')}</span>
+    `;
+    const eventLink = event.url
+      ? `<a class="activity-event-link" href="${escapeAttr(event.url)}" target="_blank" rel="noreferrer">${eventContent}</a>`
+      : `<div class="activity-event-link" aria-disabled="true">${eventContent}</div>`;
     item.innerHTML = `
-      <a class="activity-event-link" href="${escapeAttr(event.url || '#')}" target="_blank" rel="noreferrer">
-        <strong>${escapeText(event.title || '새 활동')}</strong>
-        <span>${escapeText(event.message || event.createdAt || '')}</span>
-      </a>
+      ${eventLink}
       <button class="tiny danger-text" type="button" data-activity-event-remove="${escapeAttr(event.id || '')}">삭제</button>
     `;
     item.querySelector('[data-activity-event-remove]')?.addEventListener('click', () => removeActivityEvent(event.id));

@@ -199,6 +199,18 @@ assert.match(
 );
 
 assert.match(
+  sidebarJs,
+  /event\.url[\s\S]*href="\$\{escapeAttr\(event\.url\)\}"[\s\S]*aria-disabled="true"/,
+  'Activity event rows without URLs should render inert text instead of a blank # tab link'
+);
+
+assert.doesNotMatch(
+  sidebarJs,
+  /event\.url \|\| '#'/,
+  'Activity event rows must not use # as a URL fallback in the Chrome popup'
+);
+
+assert.match(
   sidebarCss,
   /\.activity-notification-controls\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(44px, 1fr\)\);/,
   'Per-streamer notification toggles should fit inside the compact Chrome popup manager'
