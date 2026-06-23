@@ -11,6 +11,7 @@
   let initialized = false;
   let currentPageType = 'unknown';
   let observer = null;
+  let changeObserverCleanup = null;
   let wideModeState = {
     isWideMode: false,
     lastStateChange: 0,
@@ -1170,14 +1171,7 @@
     }
 
     // DOM 변경 옵저버 정리 (페이지별)
-    if (observer) {
-      observer.disconnect();
-      observer = null;
-      window.ChzzkLogger?.debug('🧹 [CLEANUP] DOM observer disconnected');
-    }
-
-    // ResizeObserver 정리 (전역 변수가 아니므로 여기서는 기본 정리만)
-    // 실제 정리는 setupChangeObserver 내부에서 처리
+    cleanupChangeObserverResources();
 
     // LNB 가시성 모니터 정리 (페이지별)
     if (window.lnbVisibilityMonitor) {
@@ -1257,13 +1251,11 @@
 
   // DOM 변경 감지 설정
   function setupChangeObserver() {
-    if (observer) {
-      observer.disconnect();
-    }
+    cleanupChangeObserverResources();
 
-    let updateTimeout = null; // 지역 변수로 변경
-    let resizeObserver = null; // ResizeObserver 추가
-    let visibilityMonitor = null; // LNB 가시성 모니터링 추가
+    let updateTimeout = null;
+    let resizeObserver = null;
+    let visibilityMonitor = null;
 
     observer = new MutationObserver((mutations) => {
       if (window.ChzzkShuffle?.mutationLock) return;
@@ -1652,7 +1644,44 @@
       window.ChzzkLogger?.debug('👁️ LNB visibility monitoring started');
     }
 
+    changeObserverCleanup = () => {
+      if (observer) {
+        observer.disconnect();
+        observer = null;
+      }
+      if (updateTimeout) {
+        clearTimeout(updateTimeout);
+        updateTimeout = null;
+      }
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+        resizeObserver = null;
+      }
+      if (visibilityMonitor) {
+        clearInterval(visibilityMonitor);
+        if (window.lnbVisibilityMonitor === visibilityMonitor) {
+          window.lnbVisibilityMonitor = null;
+        }
+        visibilityMonitor = null;
+      }
+      window.ChzzkLogger?.debug('🧹 [CLEANUP] Change observer resources cleaned up');
+    };
+
     window.ChzzkLogger?.debug('👁️ DOM change observer set up');
+  }
+
+  function cleanupChangeObserverResources() {
+    if (typeof changeObserverCleanup === 'function') {
+      changeObserverCleanup();
+      changeObserverCleanup = null;
+      return;
+    }
+
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+      window.ChzzkLogger?.debug('🧹 [CLEANUP] DOM observer disconnected');
+    }
   }
 
   // 범용 페이지 초기화 (모든 치지직 페이지)
