@@ -991,7 +991,8 @@
 
         // 시청자 수 설정 변경 시 즉시 적용
         if (changes.hideViewerCount !== undefined) {
-          window.ChzzkViewerCount.scheduleUpdate();
+          window.ChzzkViewerCount?.setEnabled?.(!!changes.hideViewerCount);
+          window.ChzzkViewerCount?.scheduleUpdate?.();
         }
 
         // 셔플 설정 변경은 다음 셔플 시 적용
