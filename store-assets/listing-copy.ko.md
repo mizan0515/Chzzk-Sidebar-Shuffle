@@ -44,6 +44,7 @@ Chrome 확장 팝업에서 빠르게 정렬, 셔플, 설정을 조작하고 같�
 ### Chrome 스크린샷
 - `store-assets/chrome/screenshots/01-tier-sort.png`
 - `store-assets/chrome/screenshots/02-popup-controls.png`
+- `store-assets/chrome/screenshots/03-tier-manager.png`
 - `store-assets/chrome/screenshots/04-safe-qa.png`
 
 ### Chrome 프로모션 이미지

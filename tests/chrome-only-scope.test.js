@@ -68,6 +68,7 @@ assert.doesNotMatch(storeAssetGenerator, /whale|Whale|WHALE/, 'Store asset gener
 assert.match(storeAssetGenerator, /03-tier-manager\.png/, 'Chrome store screenshots should show in-popup tier management, not Whale sidebar');
 assert.doesNotMatch(storeListingCopy, /qa:chromium:isolated|qa:whale|build:whale|Whale Store|Chromium 격리 QA PASS/, 'Store listing copy must not route release checks through removed isolated/Whale lanes');
 assert.match(storeListingCopy, /실제 Chrome 확장 액션 팝업[\s\S]*치지직 팔로잉 페이지 동작 검증/, 'Store listing copy should name the real Chrome action popup and CHZZK page behavior as release checks');
+assert.match(storeListingCopy, /03-tier-manager\.png/, 'Store listing copy should include the Chrome in-popup tier manager screenshot artifact');
 assert.doesNotMatch(mainChromePopupQa, /direct-popup-url-fallback|Target\.createTarget|popup\.html`\s*\}/, 'Main Chrome popup QA must not substitute direct popup URL for the extension action');
 assert.match(mainChromePopupQa, /Real extension action popup did not open/, 'Main Chrome popup QA should fail clearly when the real action popup cannot be opened');
 assert.match(mainChromePopupQa, /requireCdpReady/, 'Main Chrome popup QA should verify the CDP endpoint before claiming main-browser evidence');
