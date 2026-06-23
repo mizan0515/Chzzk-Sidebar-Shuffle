@@ -12,6 +12,7 @@ const readinessScript = readFileSync(join(__dirname, '..', 'scripts', 'check-mai
 const browserQaCleanupScript = readFileSync(join(__dirname, '..', 'scripts', 'Stop-BrowserQaSessions.ps1'), 'utf8');
 const popupJs = readFileSync(join(__dirname, '..', 'popup.js'), 'utf8');
 const storeAssetGenerator = readFileSync(join(__dirname, '..', 'scripts', 'generate-store-assets.mjs'), 'utf8');
+const storeListingCopy = readFileSync(join(__dirname, '..', 'store-assets', 'listing-copy.ko.md'), 'utf8');
 const mainChromePopupQa = readFileSync(join(__dirname, '..', 'scripts', 'qa-main-chrome-popup.mjs'), 'utf8');
 
 assert.equal(packageJson.scripts['build:whale'], undefined, 'Product scope is Chrome-only; build:whale must not be exposed');
@@ -65,6 +66,8 @@ assert.doesNotMatch(popupJs, /showWhaleSidebar|sidebarAction\.show|platform\?\.i
 
 assert.doesNotMatch(storeAssetGenerator, /whale|Whale|WHALE/, 'Store asset generator must not create or advertise Whale assets');
 assert.match(storeAssetGenerator, /03-tier-manager\.png/, 'Chrome store screenshots should show in-popup tier management, not Whale sidebar');
+assert.doesNotMatch(storeListingCopy, /qa:chromium:isolated|qa:whale|build:whale|Whale Store|Chromium 격리 QA PASS/, 'Store listing copy must not route release checks through removed isolated/Whale lanes');
+assert.match(storeListingCopy, /실제 Chrome 확장 액션 팝업[\s\S]*치지직 팔로잉 페이지 동작 검증/, 'Store listing copy should name the real Chrome action popup and CHZZK page behavior as release checks');
 assert.doesNotMatch(mainChromePopupQa, /direct-popup-url-fallback|Target\.createTarget|popup\.html`\s*\}/, 'Main Chrome popup QA must not substitute direct popup URL for the extension action');
 assert.match(mainChromePopupQa, /Real extension action popup did not open/, 'Main Chrome popup QA should fail clearly when the real action popup cannot be opened');
 assert.match(mainChromePopupQa, /requireCdpReady/, 'Main Chrome popup QA should verify the CDP endpoint before claiming main-browser evidence');

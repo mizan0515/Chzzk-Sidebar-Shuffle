@@ -60,6 +60,6 @@ Chrome 확장 팝업에서 빠르게 정렬, 셔플, 설정을 조작하고 같�
 
 ## 업로드 전 주의
 
-- Chromium 격리 QA PASS는 기능 근거이지만, Chrome Web Store 공개 가능 판정의 전부가 아닙니다.
-- Chrome Store 공개 전에는 `npm run validate`, `npm run qa:chromium:isolated`, 가능하면 `npm run qa:main:required`를 분리해 확인해야 합니다.
+- Chrome Store 공개 전에는 `npm run validate`, `npm run build:chrome`, 실제 Chrome 확장 액션 팝업, 치지직 팔로잉 페이지 동작 검증을 분리해 확인해야 합니다.
+- 격리 Chromium, 직접 `chrome-extension://.../popup.html`, Whale 사이드바 경로는 Chrome Web Store 공개 가능 판정의 acceptance evidence가 아닙니다.
 - 실제 스토어 제출은 계정, 심사, 공개 범위가 걸린 manager-only 결정입니다.
