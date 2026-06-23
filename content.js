@@ -11,12 +11,254 @@
   let initialized = false;
   let currentPageType = 'unknown';
   let observer = null;
+  let changeObserverCleanup = null;
   let wideModeState = {
     isWideMode: false,
     lastStateChange: 0,
     lnbElementsPresent: true,
     preservedShuffleState: null
   };
+  const LIVE_SAFETY_DEFAULTS = {
+    disableLiveChatInput: false,
+    disableLiveDonationButtons: false
+  };
+  let liveSafetySettings = { ...LIVE_SAFETY_DEFAULTS };
+  let liveSafetyObserver = null;
+  let liveSafetyTimer = null;
+  let liveSafetyStorageListener = null;
+
+  function initializeLiveSafetyControls() {
+    if (typeof window.__chzzkLiveSafetyCleanup === 'function') {
+      window.__chzzkLiveSafetyCleanup();
+    }
+
+    liveSafetyStorageListener = (changes, areaName) => {
+      if (areaName !== 'local' || !changes?.satSettings) return;
+      updateLiveSafetySettings(changes.satSettings.newValue || {});
+    };
+
+    window.__chzzkLiveSafetyCleanup = () => {
+      stopLiveSafetyControls();
+      window.chrome?.storage?.onChanged?.removeListener?.(liveSafetyStorageListener);
+      liveSafetyStorageListener = null;
+      restoreLiveSafetyControls();
+    };
+
+    readLiveSafetySettings();
+    startLiveSafetyControls();
+    window.chrome?.storage?.onChanged?.addListener?.(liveSafetyStorageListener);
+  }
+
+  function readLiveSafetySettings() {
+    const storage = window.chrome?.storage?.local;
+    if (!storage?.get) return;
+    storage.get(['satSettings'], (result) => {
+      if (window.chrome?.runtime?.lastError) return;
+      updateLiveSafetySettings(result?.satSettings || {});
+    });
+  }
+
+  function updateLiveSafetySettings(settings) {
+    liveSafetySettings = {
+      ...LIVE_SAFETY_DEFAULTS,
+      ...(settings || {}),
+      disableLiveChatInput: settings?.disableLiveChatInput === true,
+      disableLiveDonationButtons: settings?.disableLiveDonationButtons === true
+    };
+    applyLiveSafetyControls();
+  }
+
+  function startLiveSafetyControls() {
+    stopLiveSafetyControls();
+    liveSafetyObserver = new MutationObserver(() => applyLiveSafetyControls());
+    liveSafetyObserver.observe(document.documentElement, { childList: true, subtree: true });
+    liveSafetyTimer = window.setInterval(applyLiveSafetyControls, 1000);
+    document.addEventListener('keydown', onLiveSafetyInputEvent, true);
+    document.addEventListener('beforeinput', onLiveSafetyInputEvent, true);
+    document.addEventListener('input', onLiveSafetyInputEvent, true);
+    document.addEventListener('click', onLiveSafetyClick, true);
+  }
+
+  function stopLiveSafetyControls() {
+    liveSafetyObserver?.disconnect();
+    liveSafetyObserver = null;
+    if (liveSafetyTimer) {
+      window.clearInterval(liveSafetyTimer);
+      liveSafetyTimer = null;
+    }
+    document.removeEventListener('keydown', onLiveSafetyInputEvent, true);
+    document.removeEventListener('beforeinput', onLiveSafetyInputEvent, true);
+    document.removeEventListener('input', onLiveSafetyInputEvent, true);
+    document.removeEventListener('click', onLiveSafetyClick, true);
+  }
+
+  function isLiveSafetySupportedPage() {
+    return window.location.hostname === 'chzzk.naver.com' &&
+      window.location.pathname.startsWith('/live/');
+  }
+
+  function applyLiveSafetyControls() {
+    if (!isLiveSafetySupportedPage()) {
+      restoreLiveSafetyControls();
+      return;
+    }
+
+    const blockChat = liveSafetySettings.disableLiveChatInput === true;
+    const blockDonation = liveSafetySettings.disableLiveDonationButtons === true;
+    for (const input of findLiveChatInputs()) {
+      setLiveInputBlocked(input, blockChat);
+    }
+    for (const button of findLiveChatSendButtons()) {
+      setLiveElementHidden(button, blockChat);
+      if (blockChat) {
+        button.disabled = true;
+        button.setAttribute('aria-disabled', 'true');
+      }
+    }
+    for (const element of findLiveDonationElements()) {
+      setLiveElementHidden(element, blockDonation);
+      if (blockDonation && 'disabled' in element) {
+        element.disabled = true;
+        element.setAttribute('aria-disabled', 'true');
+      }
+    }
+  }
+
+  function restoreLiveSafetyControls() {
+    document.querySelectorAll('[data-chzzk-live-safety-hidden], [data-chzzk-live-safety-input], [data-chzzk-live-safety-disabled]')
+      .forEach((element) => {
+        if (element.dataset.chzzkLiveSafetyInput === 'true') {
+          restoreLiveInput(element);
+        }
+        setLiveElementHidden(element, false);
+        if (element.dataset.chzzkLiveSafetyDisabled === 'true' && 'disabled' in element) {
+          element.disabled = element.dataset.chzzkLiveSafetyWasDisabled === 'true';
+          if (element.dataset.chzzkLiveSafetyHadAriaDisabled === 'true') {
+            element.setAttribute('aria-disabled', element.dataset.chzzkLiveSafetyAriaDisabled || 'true');
+          } else {
+            element.removeAttribute('aria-disabled');
+          }
+          delete element.dataset.chzzkLiveSafetyDisabled;
+        }
+      });
+  }
+
+  function findLiveChatInputs() {
+    return Array.from(document.querySelectorAll([
+      'textarea[class*="live_chatting_input_input"]',
+      'textarea[placeholder*="채팅"]',
+      '[contenteditable="true"][class*="chat"]'
+    ].join(',')));
+  }
+
+  function findLiveChatSendButtons() {
+    return uniqueElements([
+      ...document.querySelectorAll('#send_chat_or_donate'),
+      ...document.querySelectorAll('button[class*="live_chatting_input_send_button"]')
+    ]).filter((element) => element instanceof HTMLButtonElement);
+  }
+
+  function findLiveDonationElements() {
+    const elements = [
+      ...document.querySelectorAll('[class*="live_chatting_input_donation"]'),
+      ...Array.from(document.querySelectorAll('button')).filter((button) => (button.textContent || '').includes('후원'))
+    ];
+    return uniqueElements(elements)
+      .map((element) => element.closest('[class*="live_chatting_input_donation"]') || element)
+      .filter((element) => element && element !== document.body && element !== document.documentElement);
+  }
+
+  function uniqueElements(elements) {
+    return Array.from(new Set(elements.filter(Boolean)));
+  }
+
+  function setLiveInputBlocked(input, blocked) {
+    if (blocked) {
+      if (input.dataset.chzzkLiveSafetyInput !== 'true') {
+        input.dataset.chzzkLiveSafetyInput = 'true';
+        input.dataset.chzzkLiveSafetyWasDisabled = String(!!input.disabled);
+        input.dataset.chzzkLiveSafetyWasReadOnly = String(!!input.readOnly);
+        input.dataset.chzzkLiveSafetyPlaceholder = input.getAttribute('placeholder') || '';
+        input.dataset.chzzkLiveSafetyHadPlaceholder = String(input.hasAttribute('placeholder'));
+      }
+      input.disabled = true;
+      input.readOnly = true;
+      input.setAttribute('aria-disabled', 'true');
+      input.setAttribute('placeholder', '확장 설정에서 채팅 입력을 막아두었습니다.');
+      if ('value' in input) input.value = '';
+      return;
+    }
+    restoreLiveInput(input);
+  }
+
+  function restoreLiveInput(input) {
+    if (input.dataset.chzzkLiveSafetyInput !== 'true') return;
+    input.disabled = input.dataset.chzzkLiveSafetyWasDisabled === 'true';
+    input.readOnly = input.dataset.chzzkLiveSafetyWasReadOnly === 'true';
+    if (input.dataset.chzzkLiveSafetyHadPlaceholder === 'true') {
+      input.setAttribute('placeholder', input.dataset.chzzkLiveSafetyPlaceholder || '');
+    } else {
+      input.removeAttribute('placeholder');
+    }
+    input.removeAttribute('aria-disabled');
+    delete input.dataset.chzzkLiveSafetyInput;
+  }
+
+  function setLiveElementHidden(element, hidden) {
+    if (!element) return;
+    if (hidden) {
+      if (element.dataset.chzzkLiveSafetyHidden !== 'true') {
+        element.dataset.chzzkLiveSafetyHidden = 'true';
+        element.dataset.chzzkLiveSafetyDisplay = element.style.display || '';
+        if ('disabled' in element) {
+          element.dataset.chzzkLiveSafetyDisabled = 'true';
+          element.dataset.chzzkLiveSafetyWasDisabled = String(!!element.disabled);
+          element.dataset.chzzkLiveSafetyHadAriaDisabled = String(element.hasAttribute('aria-disabled'));
+          element.dataset.chzzkLiveSafetyAriaDisabled = element.getAttribute('aria-disabled') || '';
+        }
+      }
+      element.style.display = 'none';
+      element.setAttribute('aria-hidden', 'true');
+      return;
+    }
+    if (element.dataset.chzzkLiveSafetyHidden === 'true') {
+      element.style.display = element.dataset.chzzkLiveSafetyDisplay || '';
+      element.removeAttribute('aria-hidden');
+      delete element.dataset.chzzkLiveSafetyHidden;
+    }
+    if (element.dataset.chzzkLiveSafetyDisabled === 'true' && 'disabled' in element) {
+      element.disabled = element.dataset.chzzkLiveSafetyWasDisabled === 'true';
+      if (element.dataset.chzzkLiveSafetyHadAriaDisabled === 'true') {
+        element.setAttribute('aria-disabled', element.dataset.chzzkLiveSafetyAriaDisabled || 'true');
+      } else {
+        element.removeAttribute('aria-disabled');
+      }
+      delete element.dataset.chzzkLiveSafetyDisabled;
+    }
+  }
+
+  function onLiveSafetyInputEvent(event) {
+    if (!liveSafetySettings.disableLiveChatInput || !isLiveSafetySupportedPage()) return;
+    if (event.target?.closest?.('textarea[class*="live_chatting_input_input"], textarea[placeholder*="채팅"], [contenteditable="true"][class*="chat"]')) {
+      event.preventDefault();
+      event.stopPropagation();
+      const input = event.target.closest('textarea, input, [contenteditable="true"]');
+      if (input && 'value' in input) input.value = '';
+    }
+  }
+
+  function onLiveSafetyClick(event) {
+    if (!isLiveSafetySupportedPage()) return;
+    if (liveSafetySettings.disableLiveChatInput && event.target.closest?.('#send_chat_or_donate, button[class*="live_chatting_input_send_button"]')) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (liveSafetySettings.disableLiveDonationButtons && event.target.closest?.('[class*="live_chatting_input_donation"]')) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
 
   // 페이지 타입 감지 (모든 치지직 페이지 지원)
   function getCurrentPageType() {
@@ -35,7 +277,7 @@
    * @returns {Object} 와이드모드 상태 정보
    */
   function detectWideModeState() {
-    console.log('🔍 [CHZZK] detectWideModeState() 시작 - 새 버전 2025');
+    window.ChzzkLogger?.debug('🔍 [CHZZK] detectWideModeState() 시작');
     try {
       // 1. 실제 치지직 LNB 요소들의 존재 여부 확인 (실제 HTML 구조 기반)
       const lnbElements = {
@@ -57,7 +299,7 @@
 
       const lnbPresent = Object.values(lnbElements).some(el => el !== null);
 
-      console.log('🔍 [CHZZK] LNB 요소 찾기 결과:', {
+      window.ChzzkLogger?.debug('🔍 [CHZZK] LNB 요소 찾기 결과:', {
         lnbPresent: lnbPresent,
         foundElements: Object.entries(lnbElements).filter(([key, el]) => el !== null).map(([key]) => key),
         detailedElements: Object.entries(lnbElements).reduce((acc, [key, el]) => {
@@ -92,7 +334,7 @@
                      lnbElements.anyAside;
 
           if (!lnb) {
-            console.log('🔍 [CHZZK] lnbActuallyHidden: LNB 요소 없음 → true');
+            window.ChzzkLogger?.debug('🔍 [CHZZK] lnbActuallyHidden: LNB 요소 없음 → true');
             return true; // LNB가 없으면 숨겨진 것으로 판단
           }
 
@@ -103,7 +345,7 @@
                           lnb.offsetWidth === 0 ||
                           lnb.offsetHeight === 0;
 
-          console.log('🔍 [CHZZK] lnbActuallyHidden 체크:', {
+          window.ChzzkLogger?.debug('🔍 [CHZZK] lnbActuallyHidden 체크:', {
             element: `${lnb.tagName}.${lnb.className}`,
             display: style.display,
             visibility: style.visibility,
@@ -121,7 +363,7 @@
             if (parentStyle.display === 'none' ||
                 parentStyle.visibility === 'hidden' ||
                 parentStyle.opacity === '0') {
-              console.log('🔍 [CHZZK] lnbActuallyHidden: 부모 요소 숨김 발견:', {
+              window.ChzzkLogger?.debug('🔍 [CHZZK] lnbActuallyHidden: 부모 요소 숨김 발견:', {
                 parentTag: parent.tagName,
                 parentClass: parent.className,
                 display: parentStyle.display,
@@ -135,7 +377,7 @@
           }
 
           const finalResult = isHidden || parentHidden;
-          console.log('🔍 [CHZZK] lnbActuallyHidden 최종 결과:', finalResult);
+          window.ChzzkLogger?.debug('🔍 [CHZZK] lnbActuallyHidden 최종 결과:', finalResult);
           return finalResult;
         })(),
 
@@ -251,7 +493,7 @@
       ];
 
       // 각 지표의 상세 값들을 로깅
-      console.log('📊 [CHZZK] 각 지표 상세 값:', {
+      window.ChzzkLogger?.debug('📊 [CHZZK] 각 지표 상세 값:', {
         lnbPresent: lnbPresent,
         wideModeIndicators: wideModeIndicators,
         urlIndicators: urlIndicators,
@@ -267,9 +509,9 @@
       const activeIndicators = indicators.filter(ind => ind.value);
       const inactiveIndicators = indicators.filter(ind => !ind.value);
 
-      console.log(`🔍 [CHZZK] detectWideModeState() 결과: 와이드모드=${isWideMode}, 점수=${totalScore}/100, LNB존재=${lnbPresent}`);
-      console.log('✅ [CHZZK] 활성 지표들:', activeIndicators.map(ind => `${ind.name}(${ind.weight}점)`).join(', '));
-      console.log('❌ [CHZZK] 비활성 지표들:', inactiveIndicators.map(ind => `${ind.name}(${ind.weight}점)`).join(', '));
+      window.ChzzkLogger?.debug(`🔍 [CHZZK] detectWideModeState() 결과: 와이드모드=${isWideMode}, 점수=${totalScore}/100, LNB존재=${lnbPresent}`);
+      window.ChzzkLogger?.debug('✅ [CHZZK] 활성 지표들:', activeIndicators.map(ind => `${ind.name}(${ind.weight}점)`).join(', '));
+      window.ChzzkLogger?.debug('비활성 지표들:', inactiveIndicators.map(ind => `${ind.name}(${ind.weight}점)`).join(', '));
 
       return {
         isWideMode: isWideMode,
@@ -422,13 +664,13 @@
 
               if (isCollapsed) {
                 window.ChzzkLogger?.info('🔘 [SHUFFLE RECOVERY] 더보기 버튼이 접힌 상태 - 자동 클릭 실행');
-                moreButton.click();
-
-                // 더보기 버튼 클릭 후 충분한 시간 대기
-                setTimeout(() => {
-                  window.ChzzkLogger?.info('🔘 [SHUFFLE RECOVERY] 더보기 버튼 클릭 후 대기 완료 - 셔플 시작');
-                  performShuffleAfterExpand(attempt, maxAttempts);
-                }, 1500); // 1.5초 대기
+                window.ChzzkMoreButton.clickExpandButton(moreButton, 'shuffle-recovery', () => {
+                  // 더보기 버튼 클릭 후 충분한 시간 대기
+                  setTimeout(() => {
+                    window.ChzzkLogger?.info('🔘 [SHUFFLE RECOVERY] 더보기 버튼 클릭 후 대기 완료 - 셔플 시작');
+                    performShuffleAfterExpand(attempt, maxAttempts);
+                  }, 1300); // clickExpandButton already waits for the first state check.
+                });
                 return;
               } else {
                 window.ChzzkLogger?.info('🔘 [SHUFFLE RECOVERY] 더보기 버튼이 이미 펼쳐진 상태 - 바로 셔플 진행');
@@ -589,49 +831,35 @@
    */
   function startWideModeMonitoring() {
     // 기본 로깅 먼저 테스트
-    console.log('🎬 [CHZZK] startWideModeMonitoring() 함수 호출됨');
-    window.ChzzkLogger?.info('🎬 [CHZZK] startWideModeMonitoring() 함수 호출됨');
+    window.ChzzkLogger?.debug('🎬 [CHZZK] startWideModeMonitoring() 함수 호출됨');
 
     try {
       // 초기 상태 설정
-      console.log('🔍 [CHZZK] detectWideModeState() 호출 중...');
+      window.ChzzkLogger?.debug('🔍 [CHZZK] detectWideModeState() 호출 중...');
       const initialState = detectWideModeState();
-      console.log('🔍 [CHZZK] detectWideModeState() 결과:', initialState);
+      window.ChzzkLogger?.debug('🔍 [CHZZK] detectWideModeState() 결과:', initialState);
 
       wideModeState.isWideMode = initialState.isWideMode;
       wideModeState.lnbElementsPresent = initialState.lnbPresent;
       wideModeState.lastStateChange = Date.now();
 
-      console.log(`🎬 [WIDE MODE] 모니터링 시작 - 초기 상태: ${initialState.isWideMode ? 'WIDE' : 'NORMAL'}, LNB: ${initialState.lnbPresent ? 'PRESENT' : 'ABSENT'}, 점수: ${initialState.confidence}/100`);
-      window.ChzzkLogger?.info(`🎬 [WIDE MODE] 모니터링 시작 - 초기 상태: ${initialState.isWideMode ? 'WIDE' : 'NORMAL'}, LNB: ${initialState.lnbPresent ? 'PRESENT' : 'ABSENT'}, 점수: ${initialState.confidence}/100`);
+      window.ChzzkLogger?.debug(`🎬 [WIDE MODE] 모니터링 시작 - 초기 상태: ${initialState.isWideMode ? 'WIDE' : 'NORMAL'}, LNB: ${initialState.lnbPresent ? 'PRESENT' : 'ABSENT'}, 점수: ${initialState.confidence}/100`);
 
       // 초기 상태 상세 로깅
       if (initialState.confidence > 0) {
         const activeIndicators = initialState.indicators.scoreBreakdown.filter(ind => ind.value);
-        console.log('🎯 [WIDE MODE] 초기 활성 지표:', activeIndicators.map(ind => `${ind.name}(${ind.score}점)`).join(', '));
-        window.ChzzkLogger?.info('🎯 [WIDE MODE] 초기 활성 지표:', activeIndicators.map(ind => `${ind.name}(${ind.score}점)`).join(', '));
+        window.ChzzkLogger?.debug('🎯 [WIDE MODE] 초기 활성 지표:', activeIndicators.map(ind => `${ind.name}(${ind.score}점)`).join(', '));
       }
 
-      console.log('⏰ [CHZZK] 주기적 모니터링 시작 (1초 간격)');
+      window.ChzzkLogger?.debug('⏰ [CHZZK] 주기적 모니터링 시작 (1초 간격)');
 
       // 주기적 모니터링 (1초 간격)
       const monitoringInterval = setInterval(() => {
         try {
           const currentState = handleWideModeStateChange();
 
-          // 더 빈번한 디버깅 로깅 (현재 상태를 매번 출력)
-          console.log(`⏱️ [CHZZK] 모니터링 틱: 와이드모드=${currentState?.isWideMode}, 점수=${currentState?.confidence}, LNB=${currentState?.lnbPresent}`);
-
           // 디버깅을 위한 상세 로깅 (5초마다)
           if (Date.now() % 5000 < 1000) {
-            console.log('🔍 [WIDE MODE] 현재 감지 상태:', {
-              isWideMode: currentState?.isWideMode,
-              score: currentState?.confidence,
-              lnbPresent: currentState?.lnbPresent,
-              activeIndicators: currentState?.indicators?.scoreBreakdown
-                ?.filter(ind => ind.value)
-                ?.map(ind => `${ind.name}(${ind.score})`) || []
-            });
             window.ChzzkLogger?.debug('🔍 [WIDE MODE] 현재 감지 상태:', {
               isWideMode: currentState?.isWideMode,
               score: currentState?.confidence,
@@ -653,10 +881,10 @@
       // 즉시 키보드 이벤트 감지 (T키 - 극장 모드)
       document.addEventListener('keydown', (event) => {
         if (event.key === 't' || event.key === 'T') {
-          console.log('⌨️ [CHZZK] T키 감지 - 극장모드 토글 예상');
+          window.ChzzkLogger?.debug('⌨️ [CHZZK] T키 감지 - 극장모드 토글 예상');
           // T키는 치지직에서 극장모드 토글 키
           setTimeout(() => {
-            console.log('⌨️ [CHZZK] T키 후 상태 체크 실행');
+            window.ChzzkLogger?.debug('⌨️ [CHZZK] T키 후 상태 체크 실행');
             handleWideModeStateChange();
           }, 500); // 키 입력 후 0.5초 뒤 상태 체크
         }
@@ -676,7 +904,6 @@
         }
       });
 
-      console.log('✅ [CHZZK] 와이드모드 모니터링 설정 완료');
       window.ChzzkLogger?.debug('🎬 [WIDE MODE] 모니터링 설정 완료 (1초 간격 + 키보드 + 전체화면 이벤트)');
 
     } catch (error) {
@@ -764,7 +991,8 @@
 
         // 시청자 수 설정 변경 시 즉시 적용
         if (changes.hideViewerCount !== undefined) {
-          window.ChzzkViewerCount.scheduleUpdate();
+          window.ChzzkViewerCount?.setEnabled?.(!!changes.hideViewerCount);
+          window.ChzzkViewerCount?.scheduleUpdate?.();
         }
 
         // 셔플 설정 변경은 다음 셔플 시 적용
@@ -795,7 +1023,7 @@
       registerGlobalFunctions();
 
       // 6. 와이드모드 모니터링 시작
-      console.log('🚀 [CHZZK] 와이드모드 모니터링 시작 호출');
+      window.ChzzkLogger?.debug('🚀 [CHZZK] 와이드모드 모니터링 시작 호출');
       startWideModeMonitoring();
 
       initialized = true;
@@ -914,6 +1142,14 @@
       } else {
         window.ChzzkLogger?.warn('⚠️ Following page: No initial channels found');
         ensureStarObservation(document);
+        setupChangeObserver();
+        setTimeout(() => {
+          const currentList = window.ChzzkShuffle?.findChannelsList?.();
+          if (currentList?.list && currentList?.items?.length) {
+            applyInitialChannelOrdering(currentList.list, currentList.items, 'following:late-list-retry');
+            ensureStarObservation(currentList.list);
+          }
+        }, 1000);
       }
     }, 8000); // 초기 로딩은 8초만 대기 (점진적이므로 더 짧게)
   }
@@ -1177,14 +1413,7 @@
     }
 
     // DOM 변경 옵저버 정리 (페이지별)
-    if (observer) {
-      observer.disconnect();
-      observer = null;
-      window.ChzzkLogger?.debug('🧹 [CLEANUP] DOM observer disconnected');
-    }
-
-    // ResizeObserver 정리 (전역 변수가 아니므로 여기서는 기본 정리만)
-    // 실제 정리는 setupChangeObserver 내부에서 처리
+    cleanupChangeObserverResources();
 
     // LNB 가시성 모니터 정리 (페이지별)
     if (window.lnbVisibilityMonitor) {
@@ -1264,13 +1493,11 @@
 
   // DOM 변경 감지 설정
   function setupChangeObserver() {
-    if (observer) {
-      observer.disconnect();
-    }
+    cleanupChangeObserverResources();
 
-    let updateTimeout = null; // 지역 변수로 변경
-    let resizeObserver = null; // ResizeObserver 추가
-    let visibilityMonitor = null; // LNB 가시성 모니터링 추가
+    let updateTimeout = null;
+    let resizeObserver = null;
+    let visibilityMonitor = null;
 
     observer = new MutationObserver((mutations) => {
       if (window.ChzzkShuffle?.mutationLock) return;
@@ -1389,6 +1616,10 @@
         clearTimeout(updateTimeout);
         updateTimeout = setTimeout(() => {
           window.ChzzkViewerCount.scheduleUpdate();
+          const currentList = window.ChzzkShuffle?.findChannelsList?.();
+          if (currentList?.list && currentList?.items?.length) {
+            applyInitialChannelOrdering(currentList.list, currentList.items, 'mutation:new-channel-content');
+          }
           // 새 채널 콘텐츠 감지 시 별표 버튼 재주입
           if (window.ChzzkStar && window.ChzzkSettings?.get('enableStar')) {
             setTimeout(() => window.ChzzkStar.injectAllStarButtons(), 200);
@@ -1655,7 +1886,44 @@
       window.ChzzkLogger?.debug('👁️ LNB visibility monitoring started');
     }
 
+    changeObserverCleanup = () => {
+      if (observer) {
+        observer.disconnect();
+        observer = null;
+      }
+      if (updateTimeout) {
+        clearTimeout(updateTimeout);
+        updateTimeout = null;
+      }
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+        resizeObserver = null;
+      }
+      if (visibilityMonitor) {
+        clearInterval(visibilityMonitor);
+        if (window.lnbVisibilityMonitor === visibilityMonitor) {
+          window.lnbVisibilityMonitor = null;
+        }
+        visibilityMonitor = null;
+      }
+      window.ChzzkLogger?.debug('🧹 [CLEANUP] Change observer resources cleaned up');
+    };
+
     window.ChzzkLogger?.debug('👁️ DOM change observer set up');
+  }
+
+  function cleanupChangeObserverResources() {
+    if (typeof changeObserverCleanup === 'function') {
+      changeObserverCleanup();
+      changeObserverCleanup = null;
+      return;
+    }
+
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+      window.ChzzkLogger?.debug('🧹 [CLEANUP] DOM observer disconnected');
+    }
   }
 
   // 범용 페이지 초기화 (모든 치지직 페이지)
@@ -1752,7 +2020,10 @@
     const core = window.ChzzkTimecodeCore;
     const video = document.querySelector('video');
     const seconds = video ? Math.floor(video.currentTime || 0) : 0;
-    const text = core?.buildCopyText ? core.buildCopyText({ seconds, videoNo: core.getVideoNo?.(location.href) || '' }) : `- [${new Date(seconds * 1000).toISOString().slice(11, 19)}] `;
+    const videoNo = core?.getVideoNo?.(location.href) || '';
+    const text = core?.buildCopyText
+      ? core.buildCopyText({ seconds, videoNo, format: videoNo ? core.FORMAT_VOD : core.FORMAT_CONTEXT })
+      : `- [${new Date(seconds * 1000).toISOString().slice(11, 19)}] `;
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
     } else {
@@ -1801,7 +2072,6 @@
 
     const messageApis = Array.from(new Set([
       window.ChzzkPlatform?.api,
-      window.whale,
       window.chrome
     ].filter(api => api?.runtime?.onMessage)));
 
@@ -1824,7 +2094,7 @@
               const state = await window.ChzzkFavoriteTierStore.load();
               window.ChzzkStar?.syncFromTierState?.(state);
             }
-            const applied = window.ChzzkShuffle?.applyTierSort?.({ shuffleWithinTiers: false }) || false;
+            const applied = window.ChzzkShuffle?.applyTierSort?.({ shuffleWithinTiers: false, pinChannelId: message?.pinChannelId || '' }) || false;
             if (window.ChzzkStar && window.ChzzkSettings?.get('enableStar')) {
               setTimeout(() => window.ChzzkStar.injectAllStarButtons(), 150);
             }
@@ -1931,6 +2201,8 @@
       }
     }
   }
+
+  initializeLiveSafetyControls();
 
   // 초기화 실행
   if (document.readyState === 'loading') {

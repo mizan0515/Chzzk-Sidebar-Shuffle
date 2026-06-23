@@ -18,6 +18,8 @@ class StarManager {
     /** @type {MutationObserver|null} DOM 변경 감지 옵저버 */
     this.domObserver = null;
     this.contextInvalidated = false;
+    this.collapsedRefreshTimer = null;
+    this.resizeHandler = null;
 
     this.injectCSS();
     this.setupStorageListener();
@@ -391,6 +393,14 @@ class StarManager {
         align-items: center !important;
       }
 
+      .chzzk-star-host-collapsed > a {
+        padding-right: 0 !important;
+      }
+
+      .chzzk-star-host-collapsed > .chzzk-star-slot {
+        display: none !important;
+      }
+
       .chzzk-star-btn svg {
         width: 18px;
         height: 18px;
@@ -584,10 +594,12 @@ class StarManager {
         window.ChzzkLogger?.info(`[STAR] Channel ${channelId} ${nowStarred ? 'starred' : 'unstarred'}`);
 
         // 즐겨찾기 상태 변경 후 즉시 위치 재정렬
+        const sortOptions = { shuffleWithinTiers: false, reason: 'star-toggle' };
+        if (nowStarred) sortOptions.pinChannelId = channelId;
         if (window.applyChzzkTierSort) {
-          await window.applyChzzkTierSort({ shuffleWithinTiers: false, reason: 'star-toggle' });
+          await window.applyChzzkTierSort(sortOptions);
         } else if (window.ChzzkShuffle && typeof window.ChzzkShuffle.applyTierSort === 'function') {
-          window.ChzzkShuffle.applyTierSort({ shuffleWithinTiers: false, reason: 'star-toggle' });
+          window.ChzzkShuffle.applyTierSort(sortOptions);
         } else if (window.ChzzkShuffle && typeof window.ChzzkShuffle.reorderByStarState === 'function') {
           window.ChzzkShuffle.reorderByStarState();
         }
@@ -618,6 +630,45 @@ class StarManager {
     }
     slot.textContent = '';
     slot.appendChild(starBtn);
+    this.updateCollapsedStarVisibility(container);
+  }
+
+  updateCollapsedStarVisibility(container) {
+    const rect = typeof container?.getBoundingClientRect === 'function' ? container.getBoundingClientRect() : null;
+    const width = rect?.width || container?.offsetWidth || 0;
+    const collapsedByWidth = width > 0 && width < 88;
+    const hasExternalCollapsedClass = (element) => {
+      const className = String(element?.className || '');
+      return className
+        .split(/\s+/)
+        .filter(value => value && value !== 'chzzk-star-host-collapsed')
+        .some(value => /collapsed|fold|mini/i.test(value));
+    };
+    const collapsedByState =
+      container?.getAttribute?.('aria-expanded') === 'false' ||
+      container?.closest?.('[aria-expanded="false"]') ||
+      hasExternalCollapsedClass(container) ||
+      container?.parentElement?.closest?.('[class*="collapsed"], [class*="fold"], [class*="mini"]');
+
+    if (collapsedByWidth || collapsedByState) {
+      container.classList.add('chzzk-star-host-collapsed');
+    } else {
+      container.classList.remove('chzzk-star-host-collapsed');
+    }
+  }
+
+  refreshCollapsedStarVisibility(container = document) {
+    const root = container || document;
+    const hosts = root.querySelectorAll?.('.chzzk-star-host') || [];
+    hosts.forEach((host) => this.updateCollapsedStarVisibility(host));
+  }
+
+  scheduleCollapsedStarVisibilityRefresh(container = document, delay = 80) {
+    if (this.collapsedRefreshTimer) clearTimeout(this.collapsedRefreshTimer);
+    this.collapsedRefreshTimer = setTimeout(() => {
+      this.collapsedRefreshTimer = null;
+      this.refreshCollapsedStarVisibility(container);
+    }, delay);
   }
 
   /**
@@ -677,9 +728,11 @@ class StarManager {
     }
 
     let debounceTimer = null;
+    let collapsedStateChanged = false;
 
     this.domObserver = new MutationObserver((mutations) => {
       let hasNewChannels = false;
+      collapsedStateChanged = false;
 
       for (const mutation of mutations) {
         if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
@@ -726,6 +779,18 @@ class StarManager {
           }
         }
 
+        if (mutation.type === 'attributes' && ['class', 'style', 'aria-expanded'].includes(mutation.attributeName)) {
+          const target = mutation.target;
+          if (
+            target?.classList?.contains?.('chzzk-star-host') ||
+            target?.querySelector?.('.chzzk-star-host') ||
+            target?.closest?.('.chzzk-star-host') ||
+            target?.matches?.('[aria-expanded="false"], [class*="collapsed"], [class*="fold"], [class*="mini"]')
+          ) {
+            collapsedStateChanged = true;
+          }
+        }
+
         if (hasNewChannels) break;
       }
 
@@ -733,14 +798,23 @@ class StarManager {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => this.injectAllStarButtons(), 150);
       }
+
+      if (collapsedStateChanged) {
+        this.scheduleCollapsedStarVisibilityRefresh();
+      }
     });
 
     this.domObserver.observe(document.body, {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['href']
+      attributeFilter: ['href', 'class', 'style', 'aria-expanded']
     });
+
+    if (!this.resizeHandler) {
+      this.resizeHandler = () => this.scheduleCollapsedStarVisibilityRefresh();
+      window.addEventListener?.('resize', this.resizeHandler);
+    }
 
     window.ChzzkLogger?.info('[STAR] DOM observer started');
   }
@@ -753,6 +827,14 @@ class StarManager {
       this.domObserver.disconnect();
       this.domObserver = null;
       window.ChzzkLogger?.info('[STAR] DOM observer stopped');
+    }
+    if (this.collapsedRefreshTimer) {
+      clearTimeout(this.collapsedRefreshTimer);
+      this.collapsedRefreshTimer = null;
+    }
+    if (this.resizeHandler) {
+      window.removeEventListener?.('resize', this.resizeHandler);
+      this.resizeHandler = null;
     }
   }
 

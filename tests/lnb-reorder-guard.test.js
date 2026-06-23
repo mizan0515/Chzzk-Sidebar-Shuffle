@@ -55,6 +55,16 @@ class FakeElement {
     });
     return result;
   }
+
+  closest(selector) {
+    if (selector !== 'li') return null;
+    let current = this;
+    while (current) {
+      if (current.tagName === 'LI') return current;
+      current = current.parentElement;
+    }
+    return null;
+  }
 }
 
 class FakeFragment {
@@ -90,6 +100,12 @@ function channelLi(id) {
   const li = new FakeElement('li', '_item_q99ll_63');
   li.appendChild(new FakeElement('a', '', { href: `/live/${id}` }));
   return li;
+}
+
+function channelOrder(list) {
+  return list.children
+    .map(child => child.querySelector?.('a[href*="/live/"], a[href*="/channel/"]')?.href?.split('/').pop())
+    .filter(Boolean);
 }
 
 const body = new FakeElement('body');
@@ -198,10 +214,145 @@ assert.equal(shuffle.restoreShuffleState(restoreState), true);
 assert.deepEqual(list.children, [header, alpha, beta, gamma]);
 
 const beforeUnsafeRestore = [...list.children];
-shuffle.findChannelsList = () => ({ list, items: [alpha, beta] });
+const incompleteList = new FakeElement('ul', '_list_incomplete');
+body.appendChild(incompleteList);
+const incompleteHeader = incompleteList.appendChild(new FakeElement('li', '_header'));
+const incompleteAlpha = incompleteList.appendChild(channelLi('alpha'));
+const incompleteBeta = incompleteList.appendChild(channelLi('beta'));
+shuffle.findChannelsList = () => ({ list: incompleteList, items: [incompleteAlpha, incompleteBeta] });
 shuffle.findChannelItems = () => [alpha, beta];
 assert.equal(shuffle.restoreShuffleState(restoreState), false);
 assert.deepEqual(list.children, beforeUnsafeRestore);
 assert.equal(list.children.length, 4);
+assert.deepEqual(incompleteList.children, [incompleteHeader, incompleteAlpha, incompleteBeta]);
+
+const directList = new FakeElement('ul', '_list_direct');
+body.appendChild(directList);
+const directHeader = directList.appendChild(new FakeElement('li', '_header'));
+const directAlpha = directList.appendChild(channelLi('direct-alpha'));
+const directBeta = directList.appendChild(channelLi('direct-beta'));
+const directGamma = directList.appendChild(channelLi('direct-gamma'));
+const nestedAnchors = [directAlpha, directBeta, directGamma].map(item => item.querySelector('a[href*="/live/"], a[href*="/channel/"]'));
+
+global.window.ChzzkPlatform = null;
+global.window.ChzzkFavoriteTierStore = {
+  state: {
+    starred: ['direct-gamma'],
+    tiers: [],
+    assignments: {},
+    tierOrder: {}
+  }
+};
+global.window.ChzzkStar = {
+  isStarred: id => id === 'direct-gamma',
+  extractChannelId: element => {
+    const link = element.querySelector?.('a[href*="/live/"], a[href*="/channel/"]') || (element.tagName === 'A' ? element : null);
+    return link?.href?.split('/').pop() || '';
+  }
+};
+global.window.ChzzkDom = {
+  extractChannel: element => {
+    const link = element.querySelector?.('a[href*="/live/"], a[href*="/channel/"]') || (element.tagName === 'A' ? element : null);
+    const id = link?.href?.split('/').pop() || '';
+    return id ? { id } : null;
+  }
+};
+shuffle.findChannelsList = () => ({ list: directList, items: nestedAnchors });
+shuffle.findChannelItems = () => nestedAnchors;
+assert.equal(shuffle.applyTierSort({ shuffleWithinTiers: false }), true);
+assert.deepEqual(directList.children, [directHeader, directGamma, directAlpha, directBeta]);
+
+const pinList = new FakeElement('ul', '_list_pin');
+body.appendChild(pinList);
+pinList.appendChild(new FakeElement('li', '_header'));
+const pinAlpha = pinList.appendChild(channelLi('pin-alpha'));
+const pinBeta = pinList.appendChild(channelLi('pin-beta'));
+const pinGamma = pinList.appendChild(channelLi('pin-gamma'));
+const pinAnchors = [pinAlpha, pinBeta, pinGamma].map(item => item.querySelector('a[href*="/live/"], a[href*="/channel/"]'));
+global.window.ChzzkFavoriteTierStore = {
+  state: {
+    starred: ['pin-alpha', 'pin-beta', 'pin-gamma'],
+    tiers: [
+      { id: 's', order: 0 },
+      { id: 'a', order: 1 }
+    ],
+    assignments: {
+      'pin-alpha': 's',
+      'pin-beta': 'a'
+    },
+    tierOrder: {
+      s: ['pin-alpha'],
+      a: ['pin-beta']
+    }
+  }
+};
+global.window.ChzzkStar = {
+  isStarred: id => ['pin-alpha', 'pin-beta', 'pin-gamma'].includes(id),
+  extractChannelId: element => {
+    const link = element.querySelector?.('a[href*="/live/"], a[href*="/channel/"]') || (element.tagName === 'A' ? element : null);
+    return link?.href?.split('/').pop() || '';
+  }
+};
+shuffle.findChannelsList = () => ({ list: pinList, items: pinAnchors });
+shuffle.findChannelItems = () => pinAnchors;
+assert.equal(shuffle.applyTierSort({ shuffleWithinTiers: false, pinChannelId: 'pin-beta' }), true);
+assert.deepEqual(channelOrder(pinList), ['pin-beta', 'pin-alpha', 'pin-gamma']);
+
+const tierShuffleList = new FakeElement('ul', '_list_tier_shuffle');
+body.appendChild(tierShuffleList);
+tierShuffleList.appendChild(new FakeElement('li', '_header'));
+const tierIds = ['tier-s1', 'tier-s2', 'tier-a1', 'tier-a2', 'tier-u1', 'tier-u2', 'tier-g1'];
+const tierItems = tierIds.map(id => tierShuffleList.appendChild(channelLi(id)));
+const tierAnchors = tierItems.map(item => item.querySelector('a[href*="/live/"], a[href*="/channel/"]'));
+global.window.ChzzkFavoriteTierStore = {
+  state: {
+    starred: ['tier-s1', 'tier-s2', 'tier-a1', 'tier-a2', 'tier-u1', 'tier-u2'],
+    tiers: [
+      { id: 's', order: 0 },
+      { id: 'a', order: 1 }
+    ],
+    assignments: {
+      'tier-s1': 's',
+      'tier-s2': 's',
+      'tier-a1': 'a',
+      'tier-a2': 'a'
+    },
+    tierOrder: {
+      s: ['tier-s1', 'tier-s2'],
+      a: ['tier-a1', 'tier-a2']
+    }
+  }
+};
+global.window.ChzzkStar = {
+  isStarred: id => global.window.ChzzkFavoriteTierStore.state.starred.includes(id),
+  extractChannelId: element => {
+    const link = element.querySelector?.('a[href*="/live/"], a[href*="/channel/"]') || (element.tagName === 'A' ? element : null);
+    return link?.href?.split('/').pop() || '';
+  }
+};
+const originalShuffleArray = shuffle.shuffleArray;
+let tierShuffleCalls = 0;
+shuffle.shuffleArray = group => {
+  tierShuffleCalls += 1;
+  group.reverse();
+};
+shuffle.findChannelsList = () => ({ list: tierShuffleList, items: tierAnchors });
+shuffle.findChannelItems = () => tierAnchors;
+assert.equal(shuffle.applyTierSort({ shuffleWithinTiers: true }), true);
+assert.deepEqual(channelOrder(tierShuffleList), ['tier-s2', 'tier-s1', 'tier-a2', 'tier-a1', 'tier-u2', 'tier-u1', 'tier-g1']);
+assert.equal(tierShuffleCalls, 4);
+
+assert.equal(shuffle.applyTierSort({ shuffleWithinTiers: true, reason: 'mutation:new-channel-content' }), true);
+assert.deepEqual(channelOrder(tierShuffleList), ['tier-s2', 'tier-s1', 'tier-a2', 'tier-a1', 'tier-u2', 'tier-u1', 'tier-g1']);
+assert.equal(tierShuffleCalls, 8);
+
+assert.equal(shuffle.applyTierSort({ shuffleWithinTiers: true, reason: 'mutation:new-channel-content' }), true);
+assert.deepEqual(channelOrder(tierShuffleList), ['tier-s2', 'tier-s1', 'tier-a2', 'tier-a1', 'tier-u2', 'tier-u1', 'tier-g1']);
+assert.equal(tierShuffleCalls, 8);
+
+assert.equal(shuffle.applyTierSort({ shuffleWithinTiers: true }), true);
+assert.deepEqual(channelOrder(tierShuffleList), ['tier-s2', 'tier-s1', 'tier-a2', 'tier-a1', 'tier-u2', 'tier-u1', 'tier-g1']);
+assert.equal(tierShuffleCalls, 12);
+shuffle.shuffleArray = originalShuffleArray;
 
 console.log('lnb reorder guard passed');

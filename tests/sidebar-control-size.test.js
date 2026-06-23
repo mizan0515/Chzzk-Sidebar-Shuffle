@@ -4,11 +4,12 @@ const { join } = require('node:path');
 
 const sidebarCss = readFileSync(join(__dirname, '..', 'sidebar.css'), 'utf8');
 const sidebarJs = readFileSync(join(__dirname, '..', 'sidebar.js'), 'utf8');
+const sidebarHtml = readFileSync(join(__dirname, '..', 'sidebar.html'), 'utf8');
 
 assert.match(
   sidebarCss,
   /--touch-target:\s*40px;/,
-  'Sidebar needs at least a 40px touch target token for reliable compact Whale controls'
+  'Tier manager needs at least a 40px touch target token for reliable compact Chrome popup controls'
 );
 
 assert.match(
@@ -26,7 +27,7 @@ assert.match(
 assert.doesNotMatch(
   sidebarCss,
   /\.toolbar\s*\{[\s\S]*position:\s*sticky;/,
-  'Sidebar toolbar should not float over tier rows while users scroll the Whale side panel'
+  'Tier manager toolbar should not float over tier rows while users scroll the popup manager'
 );
 
 assert.match(
@@ -56,7 +57,7 @@ assert.match(
 assert.match(
   sidebarCss,
   /@container \(min-width: 470px\)[\s\S]*\.streamer-card\s*\{[\s\S]*grid-template-columns:\s*36px minmax\(0, 1fr\) var\(--touch-target\) minmax\(210px, 0\.78fr\);/,
-  'Wide Whale sidebar layout should keep the favorite-button column aligned to the shared touch target'
+  'Wide popup manager layout should keep the favorite-button column aligned to the shared touch target'
 );
 
 assert.match(
@@ -116,7 +117,7 @@ assert.match(
 assert.match(
   sidebarCss,
   /\.tier-head h2,[\s\S]*\.section-title h2\s*\{[\s\S]*white-space:\s*nowrap;/,
-  'Tier headings should remain on one line in the Whale sidebar width range'
+  'Tier headings should remain on one line in the Chrome popup manager width range'
 );
 
 assert.match(
@@ -147,6 +148,84 @@ assert.match(
   sidebarJs,
   /즐겨찾기 채널을 먼저 추가해 주세요/,
   'Sidebar disabled sort buttons should explain the missing favorite requirement'
+);
+
+assert.match(
+  sidebarHtml,
+  /id="activityForm"[\s\S]*id="activityNameInput"[\s\S]*id="activityChannelInput"[\s\S]*id="activityCafeInput"[\s\S]*id="activityNicknameInput"[\s\S]*id="activityAddBtn"/,
+  'Sidebar activity tracker needs an in-extension add form instead of relying on the old standalone popup'
+);
+
+assert.match(
+  sidebarJs,
+  /ACTIVITY_ADD_STREAMER[\s\S]*ACTIVITY_TOGGLE_STREAMER[\s\S]*ACTIVITY_REMOVE_STREAMER/,
+  'Sidebar activity tracker should add, toggle, and remove tracked streamers through prefixed background messages'
+);
+
+assert.match(
+  sidebarJs,
+  /data-activity-notification[\s\S]*ACTIVITY_UPDATE_STREAMER_NOTIFICATIONS/,
+  'Sidebar activity tracker should expose per-streamer live, title, and cafe notification controls'
+);
+
+assert.match(
+  sidebarHtml,
+  /id="activityMonitorToggleBtn"[\s\S]*id="activityIntervalInput"[\s\S]*id="activityNotifyLiveStartInput"[\s\S]*id="activityNotifyTitleInput"[\s\S]*id="activityNotifyCafeInput"/,
+  'Sidebar activity tracker should expose monitoring interval and notification settings in the extension UI'
+);
+
+assert.match(
+  sidebarHtml,
+  /id="activityDisableLiveChatInput"[\s\S]*id="activityDisableDonationInput"/,
+  'Sidebar activity tracker should expose live-page safety controls from the integrated tracker'
+);
+
+assert.match(
+  sidebarJs,
+  /activityMonitorToggleBtn[\s\S]*updateActivitySettings/,
+  'Sidebar activity monitor toggle should be wired to settings updates'
+);
+
+assert.match(
+  sidebarJs,
+  /ACTIVITY_SAVE_SETTINGS[\s\S]*normalizeActivitySettings/,
+  'Sidebar activity settings should save through the background and re-render normalized state'
+);
+
+assert.match(
+  sidebarJs,
+  /data-activity-event-remove[\s\S]*removeActivityEvent[\s\S]*ACTIVITY_REMOVE_EVENT/,
+  'Sidebar activity tracker should let users remove individual recent activity records'
+);
+
+assert.match(
+  sidebarJs,
+  /isSafeActivityEventUrl\(event\.url\)[\s\S]*href="\$\{escapeAttr\(event\.url\)\}"[\s\S]*rel="noopener noreferrer"[\s\S]*aria-disabled="true"/,
+  'Activity event rows should render clickable links only for safe CHZZK/Naver Cafe URLs'
+);
+
+assert.doesNotMatch(
+  sidebarJs,
+  /event\.url \|\| '#'/,
+  'Activity event rows must not use # as a URL fallback in the Chrome popup'
+);
+
+assert.match(
+  sidebarJs,
+  /function isSafeActivityEventUrl\(value\)[\s\S]*url\.protocol !== 'https:'[\s\S]*host === 'chzzk\.naver\.com'[\s\S]*host === 'cafe\.naver\.com'[\s\S]*host\.endsWith\('\.cafe\.naver\.com'\)/,
+  'Activity event link safety should allow only HTTPS CHZZK and Naver Cafe destinations, including Naver Cafe subdomains'
+);
+
+assert.match(
+  sidebarCss,
+  /\.activity-notification-controls\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(44px, 1fr\)\);/,
+  'Per-streamer notification toggles should fit inside the compact Chrome popup manager'
+);
+
+assert.match(
+  sidebarCss,
+  /\.activity-event-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/,
+  'Activity event rows should keep the open link and delete action inside the compact Chrome popup manager'
 );
 
 console.log('sidebar control size regression passed');

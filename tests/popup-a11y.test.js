@@ -53,10 +53,10 @@ assert.match(
   'Popup row click handling should not double-toggle direct button clicks'
 );
 
-assert.match(
+assert.doesNotMatch(
   popupJs,
-  /async function showWhaleSidebar\(\)/,
-  'Whale tier management should try the native sidebar action before falling back to a tab'
+  /showWhaleSidebar|sidebarAction\.show|platform\?\.isWhale\(\)/,
+  'Chrome tier management must stay in the popup and must not branch to Whale sidebar UI'
 );
 
 assert.match(
@@ -93,6 +93,18 @@ assert.match(
   popupJs,
   /element\.setAttribute\('aria-label', disabled \? `\$\{label\}: \$\{reason\}` : label\)/,
   'Popup disabled buttons should expose their reason through the accessible label'
+);
+
+assert.match(
+  popupJs,
+  /setupEvents\(\);\s*try\s*\{[\s\S]*await loadSettings\(\);[\s\S]*await hydrateActiveTab\(\);/,
+  'Popup controls should be bound before async tab/storage hydration can fail'
+);
+
+assert.match(
+  popupJs,
+  /팝업을 초기화하지 못했습니다/,
+  'Popup initialization failures should render a visible recovery status instead of leaving a blank popup'
 );
 
 console.log('popup accessibility regression passed');

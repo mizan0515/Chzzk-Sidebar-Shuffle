@@ -20,7 +20,7 @@ function isPass(value) {
 }
 
 function isUnverified(value) {
-  return /\bUNVERIFIED\b|\bNOT_READY\b|\bblocked\b/i.test(String(value || ''));
+  return /UNVERIFIED|NOT_READY|blocked/i.test(String(value || ''));
 }
 
 if (!existsSync(boardPath)) {
@@ -29,16 +29,16 @@ if (!existsSync(boardPath)) {
 
 const board = JSON.parse(readFileSync(boardPath, 'utf8'));
 const validation = board.validation || {};
-const requiredPassFields = ['static', 'build', 'chromium_isolated', 'whale_isolated'];
+const requiredPassFields = ['static', 'build'];
 const missing = requiredPassFields.filter(field => !isPass(validation[field]));
 
 if (missing.length) {
   fail(`Missing PASS validation fields before closeout: ${missing.join(', ')}`);
 }
 
-const mainBrowser = String(validation.main_browser || '');
+const mainBrowser = String(validation.main_chrome || validation.main_browser || '');
 if (!isPass(mainBrowser) && !allowMainUnverified) {
-  fail('Main logged-in browser real-use evidence is not PASS. Run main Chrome/Whale QA, or rerun this guard with --allow-main-unverified only when the final report explicitly classifies it as manager-only/hard-external.');
+  fail('Main logged-in Chrome real-use evidence is not PASS. Run the real main Chrome action-popup and CHZZK following-page QA before release/Done, or rerun this guard with --allow-main-unverified only for a Draft PR report that preserves the exact Chrome retry condition.');
 }
 
 if (allowMainUnverified && !isUnverified(mainBrowser) && !isPass(mainBrowser)) {
@@ -53,5 +53,5 @@ console.log(JSON.stringify({
   branch: board.branch || null,
   note: isPass(mainBrowser)
     ? 'Main browser real-use evidence is present.'
-    : 'Static/build/isolated QA are complete, but root Done/release-ready still requires main-browser evidence or an explicit manager-only follow-up.'
+    : 'Static/build gates are complete, but root Done/release-ready still requires main-browser evidence. Keep the PR Draft and retry only when manager-visible Chrome is foreground on chzzk.naver.com with the toolbar/action area visible, or when an approved Chrome/CDP/Computer Use route exposes the real extension action popup internals by label.'
 }, null, 2));

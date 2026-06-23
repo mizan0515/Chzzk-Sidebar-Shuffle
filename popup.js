@@ -33,11 +33,19 @@ let reinjectedTabIds = new Set();
 let isWorking = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  browserBadge.textContent = platform?.isWhale() ? 'Whale' : 'Chrome';
+  browserBadge.textContent = 'Chrome';
   versionText.textContent = `v${platform.runtime?.getManifest?.().version || ''}`;
-  await loadSettings();
-  await hydrateActiveTab();
   setupEvents();
+  try {
+    await loadSettings();
+    await hydrateActiveTab();
+  } catch (error) {
+    setButtonsEnabled(false);
+    setStatus(platform?.isContextInvalidatedError?.(error)
+      ? '확장이 갱신되었습니다. 치지직 탭을 새로고침해 주세요.'
+      : '팝업을 초기화하지 못했습니다. 새로고침을 눌러 다시 연결하세요.');
+    window.ChzzkLogger?.warn?.('[POPUP] Initialization failed', error);
+  }
 });
 
 async function loadSettings() {
@@ -104,34 +112,12 @@ function setupEvents() {
 
   document.getElementById('openManagerBtn').addEventListener('click', async () => {
     if (isWorking) return;
-    if (platform?.isWhale() && await showWhaleSidebar()) {
-      setStatus('Whale 사이드바에서 티어 관리를 열었습니다.');
-      window.close();
-      return;
-    }
     showTierScreen();
   });
 
   document.getElementById('backToHomeBtn')?.addEventListener('click', () => {
     showHomeScreen();
   });
-}
-
-async function showWhaleSidebar() {
-  const sidebarAction = platform?.sidebarAction;
-  if (!sidebarAction?.show) return false;
-  try {
-    await new Promise((resolve, reject) => {
-      sidebarAction.show(() => {
-        const error = platform.runtime?.lastError;
-        if (error) reject(new Error(error.message || String(error)));
-        else resolve();
-      });
-    });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 async function runExclusive(message, task) {

@@ -162,7 +162,7 @@ function slideSvg({ title, subtitle, bullets, label, accent = '#00ffa3', mode = 
     <rect x="646" y="74" width="558" height="652" rx="32" fill="#0c141b" stroke="#28404d" stroke-width="2"/>
     <rect x="676" y="112" width="498" height="574" rx="24" fill="#101b24" stroke="#223542"/>
     ${mode === 'tiers' ? tierRows : ''}
-    <text x="925" y="698" text-anchor="middle" font-family="Inter, Segoe UI, sans-serif" font-size="18" font-weight="700" fill="#6f8190">CHZZK Tier Sort</text>
+    <text x="925" y="698" text-anchor="middle" font-family="Inter, Segoe UI, sans-serif" font-size="18" font-weight="700" fill="#6f8190">CHZZK Favorites &amp; Tiers</text>
   </svg>`;
 }
 
@@ -197,8 +197,7 @@ async function main() {
   copyFileSync(join(iconOut, 'icon-128.png'), join(root, 'icon.png'));
   copyFileSync(join(iconOut, 'icon-128.png'), join(outRoot, 'icons', 'store-icon-128.png'));
 
-  const popupShot = join(artifacts, 'chromium-popup-final-340.png');
-  const whaleShot = join(artifacts, 'whale-sidebar-regression-390.png');
+  const popupShot = join(artifacts, 'chromium-popup-final-390.png');
   const slides = [
     {
       file: '01-tier-sort.png',
@@ -212,23 +211,23 @@ async function main() {
     {
       file: '02-popup-controls.png',
       title: ['Chrome 팝업에서', '바로 적용'],
-      subtitle: '정렬, 셔플, 목록 펼치기, 시청자 수 숨김을 빠르게 조작합니다.',
+      subtitle: '팝업에서 즉시 실행합니다.',
       bullets: ['현재 치지직 탭 감지', '버튼 상태와 이유 표시', '작은 팝업에서도 안정적인 조작'],
       label: 'CHROME',
       screenshot: popupShot,
-      screenshotWidth: 340,
+      screenshotWidth: 390,
       screenshotHeight: 574,
-      left: 752,
+      left: 728,
       top: 112,
       accent: '#73c2fb'
     },
     {
-      file: '03-whale-sidebar.png',
-      title: ['Whale 사이드바로', '보면서 관리'],
-      subtitle: '치지직을 켜 둔 채 오른쪽 패널에서 즐겨찾기와 티어를 조정합니다.',
-      bullets: ['Whale 전용 사이드바', '검색과 미분류 관리', '변경 즉시 현재 탭에 반영'],
-      label: 'WHALE',
-      screenshot: whaleShot,
+      file: '03-tier-manager.png',
+      title: ['팝업 안에서', '티어 관리'],
+      subtitle: '새 탭 없이 팝업 안에서 바로 관리합니다.',
+      bullets: ['팝업 내부 관리 화면', '뒤로 가기로 원래 화면 복귀', '오프라인 추적 채널 포함'],
+      label: 'MANAGE',
+      screenshot: popupShot,
       screenshotWidth: 390,
       screenshotHeight: 574,
       left: 728,
@@ -239,7 +238,7 @@ async function main() {
       file: '04-safe-qa.png',
       title: ['채널이 사라지지 않게', '검증한 정렬'],
       subtitle: '즐겨찾기 추가·티어 지정·제거 후에도 LNB 채널 수를 보존합니다.',
-      bullets: ['실제 치지직 URL 기반 QA', 'stale 확장 컨텍스트 복구 안내', 'Chrome/Whale 별도 패키지 생성'],
+      bullets: ['실제 치지직 URL 기반 QA', 'stale 확장 컨텍스트 복구 안내', 'Chrome 전용 패키지 생성'],
       label: 'SAFE',
       mode: 'tiers',
       accent: '#ffd166'
@@ -248,9 +247,7 @@ async function main() {
 
   for (const slide of slides) {
     const chromePath = join(outRoot, 'chrome', 'screenshots', slide.file);
-    const whalePath = join(outRoot, 'whale', 'screenshots', slide.file);
     await makeSlide(sharp, { ...slide, output: chromePath });
-    await makeSlide(sharp, { ...slide, output: whalePath });
   }
 
   await writePngFromSvg(sharp, `
@@ -261,7 +258,7 @@ async function main() {
       <rect width="440" height="280" fill="url(#bg)"/>
       <circle cx="340" cy="72" r="106" fill="#00ffa3" opacity=".12"/>
       <image href="data:image/png;base64,${readFileSync(join(iconOut, 'icon-128.png')).toString('base64')}" x="44" y="52" width="112" height="112"/>
-      ${svgText(['CHZZK', 'Tier Sort'], 182, 104, { size: 38, weight: 900, lineHeight: 44 })}
+      ${svgText(['CHZZK', 'Favorites & Tiers'], 182, 104, { size: 34, weight: 900, lineHeight: 42 })}
       ${svgText(['즐겨찾기 · 티어 · 셔플'], 184, 184, { size: 19, weight: 700, fill: '#9fb0bd' })}
     </svg>
   `, join(outRoot, 'chrome', 'promo-small-440x280.png'), 440, 280);

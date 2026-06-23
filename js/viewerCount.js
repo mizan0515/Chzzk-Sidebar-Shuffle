@@ -9,6 +9,9 @@ let viewerCountDebounceTimer = null;
 let masterViewerCountTimer = null;
 let lastViewerCountState = null;
 let globalViewerObserver = null;
+let viewerRouteCleanupRegistered = false;
+let viewerRouteOriginalPushState = null;
+let viewerRouteOriginalReplaceState = null;
 let processedElements = new WeakSet(); // 메모리 누수 방지
 
 /**
@@ -21,6 +24,10 @@ class ViewerCountManager {
     this.masterTimer = null;
     this.lastState = null;
     this.isEnabled = true;
+    this.liveMonitorInterval = null;
+    this.cardMonitorInterval = null;
+    this.liveBeforeUnloadCleanup = null;
+    this.cardBeforeUnloadCleanup = null;
     
     // CSS 스타일 주입
     this.injectCSS();
@@ -142,6 +149,19 @@ class ViewerCountManager {
         opacity: 0 !important;
         font-size: 0 !important;
         color: transparent !important;
+      }
+
+      /* CHZZK often ships hashed container classes for viewer-count text such as
+         "_container_1o5pg_2 undefined"; JS validates the text before marking it. */
+      body.chzzk-hide-viewer-count [data-chzzk-hidden="true"].chzzk-viewer-hidden {
+        visibility: hidden !important;
+        opacity: 0 !important;
+        font-size: 0 !important;
+        line-height: 0 !important;
+        color: transparent !important;
+        max-width: 0 !important;
+        max-height: 0 !important;
+        overflow: hidden !important;
       }
       
       body.chzzk-hide-viewer-count em.navigator_count__kpr6- {
@@ -592,14 +612,20 @@ class ViewerCountManager {
     // 즉시 처리 대상: 특정 클래스를 가진 요소들
     const immediateTargets = [
       'thumbnail_badge_container__sMIz3',  // 카드 뷰 시청자 수
-      'navigator_count__kpr6-',            // LNB 사이드바 시청자 수  
-      'video_information_count__Y05sI'     // 라이브 페이지 시청자 수
+      'navigator_count__kpr6-',            // LNB 사이드바 시청자 수
+      'video_information_count__Y05sI',    // 라이브 페이지 시청자 수
+      '_container_'                        // 해시 컨테이너: 텍스트+컨텍스트 검증 필요
     ];
     
     // 즉시 처리 대상 클래스 확인
     const isImmediateTarget = immediateTargets.some(target => safeClassName.includes(target));
     
     if (isImmediateTarget) {
+      if (safeClassName.includes('_container_') && !this.isLikelyChzzkViewerCountContainer(element)) {
+        window.ChzzkLogger?.debug(`🛡️ [IMMEDIATE] Hashed container not in viewer context: "${text}"`);
+        return false;
+      }
+
       // LIVE 배지 보호 (thumbnail_badge_container__sMIz3의 경우)
       if (safeClassName.includes('thumbnail_badge_container__sMIz3')) {
         // LIVE 배지는 보호
@@ -634,6 +660,13 @@ class ViewerCountManager {
           return true;
         }
       }
+
+      else if (safeClassName.includes('_container_')) {
+        if (this.isViewerCountPattern(text)) {
+          window.ChzzkLogger?.info(`⚡ [IMMEDIATE] Hashed viewer count container target: "${text}"`);
+          return true;
+        }
+      }
     }
     
     // 구조적 경로 확인 (추가 보안)
@@ -643,7 +676,12 @@ class ViewerCountManager {
       // LNB 구조적 경로  
       '.navigator_item__mH4JG em.navigator_count__kpr6-',
       // 라이브 정보 구조적 경로
-      '[class*="video_information_data"] strong.video_information_count__Y05sI'
+      '[class*="video_information_data"] strong.video_information_count__Y05sI',
+      // 해시 클래스 컨테이너 백업 경로
+      '[class*="video_card"] span[class*="_container_"]',
+      '[class*="navigator"] span[class*="_container_"]',
+      '[class*="navigation_bar"] span[class*="_container_"]',
+      '[class*="video_information"] span[class*="_container_"]'
     ];
     
     for (const path of structuralPaths) {
@@ -682,6 +720,31 @@ class ViewerCountManager {
     
     window.ChzzkLogger?.debug(`⏭️ [IMMEDIATE] Not immediate target: "${text}"`);
     return false;
+  }
+
+  /**
+   * CHZZK hashed container classes are too broad to hide by class alone. Only
+   * accept them when the text looks like a viewer count and the structural
+   * neighborhood is a card, LNB, or live-information surface.
+   * @private
+   * @param {Element} element
+   * @returns {boolean}
+   */
+  isLikelyChzzkViewerCountContainer(element) {
+    const text = element?.textContent?.trim() || '';
+    if (!this.isViewerCountPattern(text)) return false;
+    if (this.isLiveIndicator(element)) return false;
+    if (element.closest('[class*="live_chatting"], [class*="chat"]')) return false;
+
+    return !!(
+      element.closest('[class*="video_card"]') ||
+      element.closest('[class*="thumbnail"]') ||
+      element.closest('[class*="navigator"]') ||
+      element.closest('[class*="navigation_bar"]') ||
+      element.closest('[class*="home_recommend"]') ||
+      element.closest('[class*="video_information"]') ||
+      element.closest('[class*="live_information"]')
+    );
   }
 
   /**
@@ -1239,9 +1302,25 @@ class ViewerCountManager {
    */
   isCriticalLayoutElement(element) {
     const tagName = element.tagName?.toLowerCase();
-    const className = (element.className && typeof element.className === 'string') ? 
-                     element.className.toLowerCase() : 
+    const className = (element.className && typeof element.className === 'string') ?
+                     element.className.toLowerCase() :
                      (element.className && element.className.baseVal ? element.className.baseVal.toLowerCase() : '');
+    const text = element.textContent?.trim() || '';
+
+    // Viewer-count badges often include "container" in their generated class
+    // names. Do not let broad layout-protection keywords block already-vetted
+    // count elements such as thumbnail_badge_container or _container_ hashes.
+    if (
+      this.isViewerCountPattern(text) &&
+      (
+        className.includes('thumbnail_badge_container') ||
+        className.includes('navigator_count') ||
+        className.includes('video_information_count') ||
+        (className.includes('_container_') && this.isLikelyChzzkViewerCountContainer(element))
+      )
+    ) {
+      return false;
+    }
 
     // 중요한 HTML 태그들
     const criticalTags = ['html', 'body', 'main', 'section', 'header', 'footer', 'nav', 'article'];
@@ -2139,6 +2218,7 @@ class ViewerCountManager {
     if (globalViewerObserver) {
       globalViewerObserver.disconnect();
     }
+    this.stopRouteScopedMonitoring();
 
     window.ChzzkLogger?.info('🔧 [MONITOR] Starting enhanced real-time monitoring system...');
 
@@ -2211,8 +2291,34 @@ class ViewerCountManager {
 
     // 카드 뷰 전용 모니터링 시작
     this.startCardViewMonitoring();
+    this.ensureRouteCleanup();
 
     window.ChzzkLogger?.info('✅ [MONITOR] Enhanced monitoring system activated');
+  }
+
+  ensureRouteCleanup() {
+    if (viewerRouteCleanupRegistered || typeof history === 'undefined') {
+      return;
+    }
+    viewerRouteOriginalPushState = history.pushState;
+    viewerRouteOriginalReplaceState = history.replaceState;
+
+    history.pushState = function(...args) {
+      window.ChzzkViewerCount?.stopRouteScopedMonitoring?.();
+      return viewerRouteOriginalPushState.apply(this, args);
+    };
+
+    history.replaceState = function(...args) {
+      window.ChzzkViewerCount?.stopRouteScopedMonitoring?.();
+      return viewerRouteOriginalReplaceState.apply(this, args);
+    };
+
+    viewerRouteCleanupRegistered = true;
+  }
+
+  stopRouteScopedMonitoring() {
+    this.stopLivePageIntensiveMonitoring();
+    this.stopCardViewMonitoring();
   }
 
   /**
@@ -2284,9 +2390,10 @@ class ViewerCountManager {
    */
   startLivePageIntensiveMonitoring() {
     window.ChzzkLogger?.info('🎯 [LIVE] Starting intensive live page monitoring...');
-    
+    this.stopLivePageIntensiveMonitoring();
+
     // 0.5초마다 라이브 페이지 시청자 수 재검사
-    const liveMonitorInterval = setInterval(() => {
+    this.liveMonitorInterval = setInterval(() => {
       if (!window.ChzzkSettings?.get('hideViewerCount')) {
         return;
       }
@@ -2311,29 +2418,21 @@ class ViewerCountManager {
         window.ChzzkLogger?.info(`⚡ [LIVE-INTERVAL] Hidden ${hiddenInInterval} elements in interval scan`);
       }
     }, 500);
-    
-    // 페이지 이동 시 정리
-    const cleanup = () => {
-      clearInterval(liveMonitorInterval);
+
+    this.liveBeforeUnloadCleanup = () => this.stopLivePageIntensiveMonitoring();
+    window.addEventListener('beforeunload', this.liveBeforeUnloadCleanup, { once: true });
+  }
+
+  stopLivePageIntensiveMonitoring() {
+    if (this.liveMonitorInterval) {
+      clearInterval(this.liveMonitorInterval);
+      this.liveMonitorInterval = null;
       window.ChzzkLogger?.debug('🧹 [LIVE] Live page monitoring cleaned up');
-    };
-    
-    // 정리 함수 등록
-    window.addEventListener('beforeunload', cleanup, { once: true });
-    
-    // URL 변경 감지로 정리
-    const originalPushState = history.pushState;
-    const originalReplaceState = history.replaceState;
-    
-    history.pushState = function(...args) {
-      cleanup();
-      return originalPushState.apply(this, args);
-    };
-    
-    history.replaceState = function(...args) {
-      cleanup();
-      return originalReplaceState.apply(this, args);
-    };
+    }
+    if (this.liveBeforeUnloadCleanup) {
+      window.removeEventListener?.('beforeunload', this.liveBeforeUnloadCleanup);
+      this.liveBeforeUnloadCleanup = null;
+    }
   }
 
   /**
@@ -2342,52 +2441,30 @@ class ViewerCountManager {
    */
   startCardViewMonitoring() {
     window.ChzzkLogger?.info('📺 [CARD] Starting card view monitoring system...');
-    
+    this.stopCardViewMonitoring();
+
     // 카드 뷰 모니터링: 0.8초마다 전체 카드 스캔
-    const cardMonitorInterval = setInterval(() => {
+    this.cardMonitorInterval = setInterval(() => {
       if (!window.ChzzkSettings?.get('hideViewerCount')) {
         return;
       }
-      
+
       this.scanCardViewElements();
     }, 800);
-    
-    // 페이지 이동 시 정리
-    const cleanup = () => {
-      clearInterval(cardMonitorInterval);
+
+    this.cardBeforeUnloadCleanup = () => this.stopCardViewMonitoring();
+    window.addEventListener('beforeunload', this.cardBeforeUnloadCleanup, { once: true });
+  }
+
+  stopCardViewMonitoring() {
+    if (this.cardMonitorInterval) {
+      clearInterval(this.cardMonitorInterval);
+      this.cardMonitorInterval = null;
       window.ChzzkLogger?.debug('🧹 [CARD] Card view monitoring cleaned up');
-    };
-    
-    // 정리 함수 등록
-    window.addEventListener('beforeunload', cleanup, { once: true });
-    
-    // URL 변경 감지로 정리 (기존 코드와 충돌 방지)
-    if (!window._cardViewCleanupRegistered) {
-      const originalPushState = history.pushState;
-      const originalReplaceState = history.replaceState;
-      
-      const wrappedPushState = function(...args) {
-        cleanup();
-        return originalPushState.apply(this, args);
-      };
-      
-      const wrappedReplaceState = function(...args) {
-        cleanup();
-        return originalReplaceState.apply(this, args);
-      };
-      
-      // 여러 번 래핑 방지
-      if (!history.pushState._cardViewWrapped) {
-        history.pushState = wrappedPushState;
-        history.pushState._cardViewWrapped = true;
-      }
-      
-      if (!history.replaceState._cardViewWrapped) {
-        history.replaceState = wrappedReplaceState;
-        history.replaceState._cardViewWrapped = true;
-      }
-      
-      window._cardViewCleanupRegistered = true;
+    }
+    if (this.cardBeforeUnloadCleanup) {
+      window.removeEventListener?.('beforeunload', this.cardBeforeUnloadCleanup);
+      this.cardBeforeUnloadCleanup = null;
     }
   }
 
@@ -2402,7 +2479,9 @@ class ViewerCountManager {
       'span[class*="thumbnail_badge_container"]:not([class*="live"]):not([class*="is_on"])',
       '.video_card_description__2sUfw span:not([class*="live"])',
       '.video_card_container__urjO6 span.thumbnail_badge_container__sMIz3',
-      '[class*="video_card_vertical"] span.thumbnail_badge_container__sMIz3'
+      '[class*="video_card_vertical"] span.thumbnail_badge_container__sMIz3',
+      '[class*="video_card"] span[class*="_container_"]',
+      '[class*="thumbnail"] span[class*="_container_"]'
     ];
     
     let cardHiddenCount = 0;
@@ -2420,7 +2499,7 @@ class ViewerCountManager {
           }
           
           // 시청자 수 패턴 확인
-          if (!element.hasAttribute('data-chzzk-hidden') && this.isCardViewerCountPattern(text)) {
+          if (!element.hasAttribute('data-chzzk-hidden') && (this.isCardViewerCountPattern(text) || this.isLikelyChzzkViewerCountContainer(element))) {
             window.ChzzkLogger?.debug(`📺 [CARD] Hiding card viewer count: "${text}" with ${selector}`);
             this.hideElement(element);
             cardHiddenCount++;
@@ -2771,6 +2850,7 @@ class ViewerCountManager {
         globalViewerObserver.disconnect();
         globalViewerObserver = null;
       }
+      this.stopRouteScopedMonitoring();
       this.showAll();
     }
     
@@ -2794,6 +2874,7 @@ class ViewerCountManager {
       globalViewerObserver.disconnect();
       globalViewerObserver = null;
     }
+    this.stopRouteScopedMonitoring();
     
     // 전역 상태 정리
     processedElements = new WeakSet();

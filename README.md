@@ -1,143 +1,120 @@
-# Chzzk Sidebar Shuffler
+# CHZZK Favorites & Tiers
 
-치지직 팔로잉 사이드바를 즐겨찾기, 티어, 셔플 기준으로 정렬하는 Chrome/Whale 확장입니다.
+Chrome-only CHZZK extension for pinning favorite streamers, sorting the following sidebar by tiers, shuffling within groups, and tracking streamer activity.
 
-## 주요 기능
+## Product Scope
 
-- 즐겨찾기 별표: 사이드바 채널을 즐겨찾기로 고정합니다.
-- 티어 정렬: S/A/B/C/D, 미분류 즐겨찾기, 일반 라이브, 일반 오프라인 순서로 정렬합니다.
-- 그룹 안 셔플: 티어 경계를 유지한 채 같은 그룹 안에서만 섞습니다.
-- 시청자 수 숨김: 사이드바와 카드의 시청자 수 노출을 줄입니다.
-- 활동 추적 통합: 활동 추적 대상 채널을 저장 채널 모델에 합쳐 비방송 중 채널도 티어 관리에 표시합니다.
-- 타임코드 복사: 치지직 영상/라이브의 현재 시간을 복사용 텍스트로 만듭니다.
-- Whale 사이드바: Whale 전용 오른쪽/왼쪽 사이드바 패널에서 티어를 관리합니다.
+- Supported browser: Chrome.
+- NAVER Whale is not a release target for this product.
+- Whale sidebar-only behavior does not satisfy the requested Chrome toolbar popup UX, so Whale build, QA, and store release lanes are intentionally not part of the default workflow.
+- A passing result requires the real Chrome extension action popup to open and be usable. Opening `chrome-extension://.../popup.html` directly is only a render probe and is not real-use evidence.
 
-## 설치
+## Features
 
-### Chrome 개발자 설치
+- Favorite star: pins a channel immediately and moves it to the top group.
+- Tier sort: sorts as S/A/B/C/D, unassigned favorites, regular live, regular offline.
+- Group shuffle: shuffles only inside the same tier/group and keeps group boundaries.
+- Viewer count hiding: reduces noisy viewer-count text around the sidebar and cards.
+- In-popup tier management: the Chrome popup switches to the tier manager screen in place and includes a back button.
+- Activity tracker integration: stored tracker channels are merged into the same channel model, so offline tracked streamers can still appear in tier management.
+- Timecode copy: copies the current CHZZK live/video time text.
 
-1. `npm run build:chrome`
-2. Chrome에서 `chrome://extensions`를 엽니다.
-3. 개발자 모드를 켭니다.
-4. `dist/chrome` 폴더를 압축해제된 확장 프로그램으로 로드합니다.
+## Chrome Developer Install
 
-### Whale 개발자 설치
+```powershell
+npm run build:chrome
+```
 
-1. `npm run build:whale`
-2. Whale에서 확장앱 관리 화면을 엽니다.
-3. 개발자 모드를 켭니다.
-4. `dist/whale` 폴더를 로드합니다.
-5. Whale 사이드바에서 `치지직 티어 정렬` 패널을 엽니다.
+1. Open Chrome `chrome://extensions`.
+2. Turn on Developer mode.
+3. Load the unpacked folder `dist/chrome`.
+4. Pin or open the extension action, then click the extension icon.
 
-## 빌드 산출물
+Normal result: a usable popup opens with sort, shuffle, settings, and tier management controls. A blank tall 1px-looking popup is a failure.
+
+## Build Artifacts
 
 ```powershell
 npm run build:all
 ```
 
-- Chrome 폴더: `dist/chrome`
-- Whale 폴더: `dist/whale`
-- Chrome 압축 해제 폴더: `artifacts/chzzk-sidebar-shuffler-chrome-v<version>`
-- Whale 압축 해제 폴더: `artifacts/chzzk-sidebar-shuffler-whale-v<version>`
+- Chrome folder: `dist/chrome`
+- Chrome unpacked artifact: `artifacts/chzzk-sidebar-shuffler-chrome-v<version>`
 - Chrome zip: `artifacts/chzzk-sidebar-shuffler-chrome-v<version>.zip`
-- Whale zip: `artifacts/chzzk-sidebar-shuffler-whale-v<version>.zip`
 
-`npm run build:chrome`, `npm run build:whale`, `npm run build:all`, `npm run validate`는 모두 해당 브라우저의 zip과 압축 해제 폴더를 함께 갱신합니다.
+`build:all` intentionally builds Chrome only.
 
-버전을 올릴 때는 Codex가 `npm run version:patch`, `npm run version:minor`, `npm run version:major` 중 하나를 실행하면 됩니다. `package.json` 버전이 바뀌면 `manifest.json` 버전이 동기화되고, 검증과 Chrome/Whale zip 및 압축 해제 폴더 생성이 이어서 실행됩니다. `npm version patch` 같은 기본 npm version 흐름도 `version` lifecycle로 같은 검증을 실행합니다.
-
-## 검증
+## Validation
 
 ```powershell
 npm run validate
 ```
 
-검증에는 다음 항목이 포함됩니다.
+Validation includes:
 
-- 모든 JavaScript `node --check`
-- 위험한 `+` 포함 해시 class selector 회귀 검사
-- CHZZK sidebar selector 회귀 테스트
-- Chrome/Whale manifest 분리 검증
-- Chrome/Whale zip artifact 생성
+- JavaScript syntax checks
+- selector and layout regression tests
+- popup structure and accessibility checks
+- favorite/tier/activity merge checks
+- Chrome manifest validation
+- Chrome zip and unpacked artifact creation
 
-### 실사용 브라우저 QA 기준
+## Real Chrome QA Standard
 
-브라우저에서 실제 동작을 확인할 때는 다음 순서를 기본으로 합니다.
+Automated isolated Chromium QA is useful for regression checks, but it is not manager real-use evidence.
 
-1. 관리자가 `@chrome`, `@browser`, `@whale`을 지정한 경우 해당 플러그인으로 이미 열린 메인 브라우저 탭과 확장 상태를 먼저 확인합니다.
-2. 메인 Chrome/Whale에 확장을 새로 설치하거나 `chrome://extensions`, `whale://extensions` 같은 설정 화면을 조작해야 하면, 브라우저 상태 변경이므로 실행 직전에 관리자 승인을 받습니다.
-3. 자동 회귀 검증은 별도 격리 브라우저에서 실행합니다. 이는 기능 회귀를 빠르게 잡기 위한 하니스이며, 메인 Chrome/Whale 실사용 증거로 대체하지 않습니다.
+The required real-use path is:
 
-메인 Whale 준비 상태 확인:
+1. Use the manager's logged-in Chrome session when the behavior depends on CHZZK login or the real toolbar popup.
+2. Install or refresh `dist/chrome` in Chrome only after manager approval, because it changes browser extension state.
+3. Click the actual Chrome extension icon or trigger the browser-owned extension action surface.
+4. Verify the popup is not blank, not 1px wide, and has usable controls.
+5. Open tier management from inside the popup, use the back button, and return to the home screen.
+6. On `https://chzzk.naver.com/following`, verify favorites, F5 reload order, group shuffle, same-tier drag/drop order, viewer-count layout, and offline tracked streamers.
 
-```powershell
-npm run qa:main:readiness
-```
+If the session cannot attach to the logged-in Chrome browser, report `UNVERIFIED_MAIN_CHROME_LOGIN_REQUIRED`, keep the PR draft, and retry only when manager-visible Chrome is foreground on `chzzk.naver.com` with the toolbar/action area visible or when an approved Chrome/CDP/Computer Use route exposes the real extension action popup internals by label. Do not substitute isolated Chromium or direct popup URL evidence.
 
-이 명령은 새 Whale을 띄우지 않고 현재 실행 중인 Whale 프로세스와 디버깅 포트 상태만 읽습니다. `127.0.0.1`와 `[::1]` 디버깅 엔드포인트를 모두 확인합니다. `mainBrowserEvidence`가 `false`이면 메인 Whale에 붙은 것이 아니므로, 격리 하니스 결과로 실사용 QA를 대체하지 않습니다.
+## Browser QA Cleanup
 
-Whale에서 `dist/whale` 압축해제 확장이 `DISABLED`인데 manifest/runtime 오류가 비어 있으면, 코드 오류가 아니라 개발자 모드가 꺼진 상태일 수 있습니다. Whale 확장앱 관리 화면에서 개발자 모드를 켠 뒤 확장을 다시 갱신합니다. 이때 비활성 사유가 `unsupportedDeveloperExtension`이면 개발자 모드/압축해제 확장 정책 문제로 보고, 기능 버그로 분류하지 않습니다.
+This project does not use an isolated Chrome or Chromium profile as acceptance QA. Real-use browser evidence must come from the manager-visible Chrome surface, through the approved `@chrome` or Computer Use route.
 
-메인 Whale 재시작 계획 확인:
-
-```powershell
-npm run qa:main:whale:plan
-```
-
-이 명령은 메인 Whale을 닫거나 새로 띄우지 않고, 제어 포트와 `dist/whale` 확장을 붙여 재시작할 때 닫힐 Whale 프로세스와 실행 인자를 보여줍니다.
-
-관리자가 열린 탭 손실 위험을 승인한 뒤에만 실행:
+Before Done or PR_READY:
 
 ```powershell
-npm run qa:main:whale:start
+npm run qa:browser-cleanup
+npm run guard:browser-cleanup
 ```
 
-이 명령은 메인 Whale을 `--remote-debugging-port=9223` 및 `--load-extension=dist/whale`로 재시작합니다. 메인 프로필에서는 기존 확장을 끄는 `--disable-extensions-except`를 쓰지 않습니다.
+The cleanup command targets only browser sessions created by this repository's QA scripts.
 
-격리 Chromium 회귀 하니스:
+## Main Chrome Helpers
 
 ```powershell
-npm run qa:chromium:isolated
+npm run qa:main:chrome:popup
 ```
 
-이 명령은 `dist/chrome`을 별도 Chromium 프로필에 로드하고, 테스트용 치지직 사이드바 DOM에서 팝업 버튼, 티어 저장, 정렬 적용, 버튼 오버플로우를 검증합니다. 출력의 `mainBrowserEvidence`가 `false`이면 메인 Chrome 실사용 검증이 아니라 자동 회귀 검증입니다.
+`qa:main:chrome:popup` only works when the manager-visible Chrome instance is already reachable through CDP. It must not launch a separate Chrome profile. If CDP is not attached, use the approved `@chrome` or Computer Use route to inspect the real Chrome window, or report that main Chrome real-use evidence is still unavailable.
 
-격리 Whale 회귀 하니스:
-
-```powershell
-npm run qa:whale:isolated
-```
-
-이 명령은 `dist/whale`을 별도 Whale 프로필에 로드하고, Whale 전용 `sidebar_action` 패널, 즐겨찾기 별 토글, 티어 저장, 정렬 적용, 버튼 오버플로우를 검증합니다. 출력의 `mainBrowserEvidence`가 `false`이면 메인 Whale 로그인 세션 검증이 아니라 자동 회귀 검증입니다.
-
-`qa:chromium`, `qa:chrome`, `qa:whale`처럼 메인 브라우저 실사용 QA로 오해될 수 있는 명령명은 쓰지 않습니다. 메인 Chrome/Whale 실사용 QA는 사용자가 실제로 쓰는 브라우저에 플러그인으로 붙어야 하며, 제어 포트나 확장 관리 화면 접근이 막히면 `BLOCKED/UNVERIFIED`로 남깁니다.
-
-## 스토어 배포 기준
-
-Chrome Web Store와 Whale Store 업로드는 계정, 심사, 공개 범위 승인이 필요합니다. 이 저장소의 기본 자동화는 zip 생성까지입니다. 실제 업로드와 공개 배포는 관리자 승인 후 별도 workflow로 추가합니다.
-
-## 완료 게이트
-
-격리 브라우저 QA를 메인 브라우저 실사용 QA로 착각하지 않도록 완료 게이트를 둡니다.
+## Completion Gate
 
 ```powershell
 npm run guard:completion
 ```
 
-이 명령은 `npm run validate`, 격리 Chromium QA, 격리 Whale QA, 메인 브라우저 실사용 증거가 모두 상태판에 `PASS`로 기록되어야 통과합니다.
+This requires static validation, Chrome build, repository regression tests, and main logged-in Chrome real-use evidence.
 
-메인 Chrome/Whale에 제어 포트나 플러그인으로 붙을 수 없어 실사용 증거를 얻지 못한 경우에는, 최종 보고서에서 `UNVERIFIED`를 명시한 뒤에만 다음 명령을 사용합니다.
+If main Chrome cannot be attached in the current session, the scoped guard may be used only with an explicit final report saying the real-use evidence is still unverified:
 
 ```powershell
 npm run guard:completion:allow-main-unverified
 ```
 
-이 명령이 통과해도 공개 스토어 업로드나 root Done을 의미하지 않습니다. 메인 브라우저 실사용 검증이 남아 있으면 PR/후속 이슈에서 별도 완료 조건으로 유지합니다.
+This does not mean public release-ready. Chrome Web Store upload remains manager-approved work.
 
-## 라이선스
+## License
 
 MIT License
 
-## 후원
+## Support
 
 [후원하기](https://aq.gy/f/Jf1nN)

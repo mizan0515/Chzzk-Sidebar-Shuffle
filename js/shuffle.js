@@ -33,6 +33,7 @@ class ShuffleManager {
     this.shuffleEverCompleted = false;
     this.lastKnownOrder = [];
     this.baselineOrderById = new Map();
+    this.lastAutoTierShuffleSignature = '';
 
     // CSS 스타일 주입
     this.injectCSS();
@@ -444,7 +445,7 @@ class ShuffleManager {
         this.findChannelsList();
 
       const list = foundList;
-      const allChannelItems = providedItems || this.findChannelItems(list || document);
+      const allChannelItems = providedItems || (list ? this.getSortableChannelItems(list) : this.findChannelItems(document));
 
       window.ChzzkLogger?.info(`🎯 [SHUFFLE] Parameters: list=${!!list}, items=${allChannelItems?.length || 0}, mutationLock=${this.mutationLock}`);
 
@@ -769,7 +770,7 @@ class ShuffleManager {
       window.ChzzkLogger?.shuffle(`🔄 Progressive shuffle: adding ${newChannels.length} new channels`);
 
       // 현재 DOM에 있는 모든 채널 가져오기
-      const currentChannels = this.findChannelItems(list);
+      const currentChannels = this.getSortableChannelItems(list);
       const channelContainers = this.prepareContainers(currentChannels);
 
       // 라이브/오프라인 분리
@@ -888,7 +889,7 @@ class ShuffleManager {
       const { list } = this.findChannelsList();
       if (!list) return;
 
-      const allChannelItems = this.findChannelItems(list);
+      const allChannelItems = this.getSortableChannelItems(list);
       if (allChannelItems.length === 0) return;
 
       const channelContainers = this.prepareContainers(allChannelItems);
@@ -941,11 +942,12 @@ class ShuffleManager {
   getChannelSnapshot() {
     try {
       const { list } = this.findChannelsList();
-      let items = this.findChannelItems(list || document);
+      let items = list ? this.getSortableChannelItems(list) : this.findChannelItems(document);
 
       if (!items.length && window.ChzzkDom?.findChannelsList) {
         const fallback = window.ChzzkDom.findChannelsList(document);
-        items = fallback.items || [];
+        items = fallback.list ? this.getSortableChannelItems(fallback.list) : (fallback.items || []);
+        if (!items.length) items = fallback.items || [];
       }
 
       const seen = new Set();
@@ -992,16 +994,18 @@ class ShuffleManager {
     const state = store?.state;
     const starManager = window.ChzzkStar;
     const shuffleWithinTiers = !!options.shuffleWithinTiers;
+    const pinChannelId = options.pinChannelId || '';
 
     try {
       let { list } = this.findChannelsList();
       if (!list) return false;
 
-      let items = this.findChannelItems(list);
+      let items = this.getSortableChannelItems(list);
       if (!items.length && window.ChzzkDom?.findChannelsList) {
         const fallback = window.ChzzkDom.findChannelsList(document);
         list = fallback.list;
-        items = fallback.items || [];
+        items = fallback.list ? this.getSortableChannelItems(fallback.list) : (fallback.items || []);
+        if (!items.length) items = fallback.items || [];
       }
       if (!items.length) return false;
 
@@ -1024,26 +1028,44 @@ class ShuffleManager {
         };
       });
       this.rememberBaselineOrder(containers);
+      const autoShuffleSignature = this.getAutoTierShuffleSignature(containers, options);
+      const effectiveShuffleWithinTiers = shuffleWithinTiers &&
+        (!autoShuffleSignature || autoShuffleSignature !== this.lastAutoTierShuffleSignature);
+      const preserveCurrentGroupOrder = shuffleWithinTiers &&
+        !!autoShuffleSignature &&
+        autoShuffleSignature === this.lastAutoTierShuffleSignature;
+
+      const pinned = [];
+      const eligibleContainers = containers.filter((item) => {
+        if (pinChannelId && item.id === pinChannelId && item.isStarred) {
+          pinned.push(item);
+          return false;
+        }
+        return true;
+      });
 
       const byTier = [];
       (state?.tiers || []).slice().sort((a, b) => a.order - b.order).forEach((tier) => {
-        byTier.push(containers.filter(item => item.isStarred && item.tierId === tier.id));
+        byTier.push(eligibleContainers.filter(item => item.isStarred && item.tierId === tier.id));
       });
 
-      const unclassifiedStarred = containers.filter(item => item.isStarred && !item.tierId);
-      const liveGeneral = containers.filter(item => !item.isStarred && item.isLive);
-      const offlineGeneral = containers.filter(item => !item.isStarred && !item.isLive);
-      const groups = [...byTier, unclassifiedStarred, liveGeneral, offlineGeneral];
+      const unclassifiedStarred = eligibleContainers.filter(item => item.isStarred && !item.tierId);
+      const liveGeneral = eligibleContainers.filter(item => !item.isStarred && item.isLive);
+      const offlineGeneral = eligibleContainers.filter(item => !item.isStarred && !item.isLive);
+      const groups = [pinned, ...byTier, unclassifiedStarred, liveGeneral, offlineGeneral].filter(group => group.length);
 
       groups.forEach((group) => {
         group.sort((a, b) => {
+          if (preserveCurrentGroupOrder) {
+            return a.originalIndex - b.originalIndex;
+          }
           if (a.tierId || b.tierId) {
             const tierDelta = a.tierOrder - b.tierOrder;
             if (tierDelta) return tierDelta;
           }
           return this.getBaselineOrder(a) - this.getBaselineOrder(b);
         });
-        if (shuffleWithinTiers) this.shuffleArray(group);
+        if (effectiveShuffleWithinTiers) this.shuffleArray(group);
       });
 
       const finalOrder = groups.flat();
@@ -1053,6 +1075,9 @@ class ShuffleManager {
       this.mutationLock = true;
       if (!this.applySafeReordering(list, finalOrder)) return false;
       this.saveCurrentOrder(list);
+      if (autoShuffleSignature && effectiveShuffleWithinTiers) {
+        this.lastAutoTierShuffleSignature = autoShuffleSignature;
+      }
       this.shuffleCompleted = true;
       this.shuffleEverCompleted = true;
       this.lastReorderTime = Date.now();
@@ -1106,6 +1131,21 @@ class ShuffleManager {
     return container?.originalIndex ?? 999999;
   }
 
+  getAutoTierShuffleSignature(containers, options = {}) {
+    if (!options.shuffleWithinTiers) return '';
+    const reason = String(options.reason || '');
+    if (!reason || reason === 'global-shuffle' || reason === 'manual') return '';
+    return (Array.isArray(containers) ? containers : [])
+      .map((item) => [
+        item?.id || '',
+        item?.tierId || '',
+        item?.isStarred ? '1' : '0',
+        item?.isLive ? '1' : '0'
+      ].join(':'))
+      .sort()
+      .join('|');
+  }
+
   /**
    * 현재 DOM 순서가 저장된 순서와 다른지 확인
    * @param {Element} list - 채널 리스트 요소
@@ -1133,6 +1173,7 @@ class ShuffleManager {
     this.channelCountHistory = [];
     this.lastKnownOrder = [];
     this.baselineOrderById = new Map();
+    this.lastAutoTierShuffleSignature = '';
 
     if (this.dynamicLoadingMonitor) {
       clearInterval(this.dynamicLoadingMonitor);
@@ -1154,7 +1195,7 @@ class ShuffleManager {
         return null;
       }
 
-      const currentChannels = this.findChannelItems(list);
+      const currentChannels = this.getSortableChannelItems(list);
       if (currentChannels.length === 0) {
         window.ChzzkLogger?.warn('⚠️ [STATE] No channels found for state capture');
         return null;
@@ -1212,7 +1253,7 @@ class ShuffleManager {
         return false;
       }
 
-      const currentChannels = this.findChannelItems(list);
+      const currentChannels = this.getSortableChannelItems(list);
       if (currentChannels.length === 0) {
         window.ChzzkLogger?.warn('⚠️ [STATE] No current channels found for state restoration');
         return false;
@@ -1268,6 +1309,11 @@ class ShuffleManager {
           matchedCount++;
         }
       });
+
+      if (matchedCount < state.channelOrder.length) {
+        window.ChzzkLogger?.warn(`⚠️ [STATE] Restore skipped: only ${matchedCount}/${state.channelOrder.length} saved channels matched`);
+        return false;
+      }
 
       // 매칭되지 않은 새 채널들은 끝에 추가
       channelMap.forEach(unmatchedChannel => {
@@ -1519,6 +1565,21 @@ class ShuffleManager {
     return Array.from(list.children).filter(child =>
       !!child.querySelector?.('a[href*="/live/"], a[href*="/channel/"]')
     );
+  }
+
+  /**
+   * DOM 재정렬에 안전한 채널 항목만 반환한다.
+   * CHZZK 내부 마크업이 바뀌어 nested navigator/card 요소가 먼저 잡히면
+   * canSafelyReorder()가 직접 자식 수 불일치로 정렬을 거부한다. 실제 이동
+   * 단위는 항상 리스트의 직접 자식 li여야 한다.
+   * @private
+   * @param {Element} list
+   * @returns {Array<Element>}
+   */
+  getSortableChannelItems(list) {
+    const directChildren = this.getDirectChannelChildren(list);
+    if (directChildren.length > 0) return directChildren;
+    return this.findChannelItems(list || document);
   }
 
   /**

@@ -32,6 +32,18 @@ const els = {
   channelCount: document.getElementById('channelCount'),
   clearAssignmentsBtn: document.getElementById('clearAssignmentsBtn'),
   activityRunBtn: document.getElementById('activityRunBtn'),
+  activityForm: document.getElementById('activityForm'),
+  activityNameInput: document.getElementById('activityNameInput'),
+  activityChannelInput: document.getElementById('activityChannelInput'),
+  activityCafeInput: document.getElementById('activityCafeInput'),
+  activityNicknameInput: document.getElementById('activityNicknameInput'),
+  activityMonitorToggleBtn: document.getElementById('activityMonitorToggleBtn'),
+  activityIntervalInput: document.getElementById('activityIntervalInput'),
+  activityNotifyLiveStartInput: document.getElementById('activityNotifyLiveStartInput'),
+  activityNotifyTitleInput: document.getElementById('activityNotifyTitleInput'),
+  activityNotifyCafeInput: document.getElementById('activityNotifyCafeInput'),
+  activityDisableLiveChatInput: document.getElementById('activityDisableLiveChatInput'),
+  activityDisableDonationInput: document.getElementById('activityDisableDonationInput'),
   activityList: document.getElementById('activityList'),
   activityCount: document.getElementById('activityCount')
 };
@@ -44,7 +56,9 @@ let lastDetectedCount = 0;
 let pageStatus = {};
 let reinjectedTabIds = new Set();
 let isWorking = false;
-let activityState = { streamers: [], events: [], states: {}, lastRun: null };
+let dragAutoScrollTimer = null;
+let dragAutoScrollDelta = 0;
+let activityState = { streamers: [], events: [], states: {}, settings: defaultActivitySettings(), lastRun: null };
 
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
@@ -88,6 +102,7 @@ function bindEvents() {
         ...activityState,
         events: response.events || activityState.events || [],
         states: response.states || activityState.states || {},
+        settings: normalizeActivitySettings(response.settings || activityState.settings),
         lastRun: response.lastRun || activityState.lastRun
       };
       await mergeActivityChannels();
@@ -97,6 +112,51 @@ function bindEvents() {
     }
     els.connectionText.textContent = '활동 확인을 완료하지 못했습니다.';
     renderActivity();
+  }));
+  els.activityForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = {
+      name: els.activityNameInput?.value?.trim() || '',
+      channel: els.activityChannelInput?.value?.trim() || '',
+      cafe: els.activityCafeInput?.value?.trim() || '',
+      nickname: els.activityNicknameInput?.value?.trim() || ''
+    };
+    await runExclusive('추적 채널을 추가하는 중입니다.', async () => {
+      const response = await platform.sendRuntimeMessage?.({ type: 'ACTIVITY_ADD_STREAMER', input }).catch(error => ({ ok: false, error: error.message || String(error) }));
+      if (!response?.ok) {
+        els.connectionText.textContent = response?.error || '추적 채널을 추가하지 못했습니다.';
+        return false;
+      }
+      els.activityNameInput.value = '';
+      els.activityChannelInput.value = '';
+      if (els.activityCafeInput) els.activityCafeInput.value = '';
+      if (els.activityNicknameInput) els.activityNicknameInput.value = '';
+      await loadActivityState();
+      els.connectionText.textContent = '활동 추적 채널을 추가했습니다.';
+      render();
+      return true;
+    });
+  });
+  els.activityMonitorToggleBtn?.addEventListener('click', () => updateActivitySettings({
+    isMonitoring: activityState.settings?.isMonitoring === false
+  }));
+  els.activityIntervalInput?.addEventListener('change', () => updateActivitySettings({
+    intervalMinutes: Number(els.activityIntervalInput.value) || defaultActivitySettings().intervalMinutes
+  }));
+  els.activityNotifyLiveStartInput?.addEventListener('change', () => updateActivitySettings({
+    notifyLiveStart: !!els.activityNotifyLiveStartInput.checked
+  }));
+  els.activityNotifyTitleInput?.addEventListener('change', () => updateActivitySettings({
+    notifyTitleChange: !!els.activityNotifyTitleInput.checked
+  }));
+  els.activityNotifyCafeInput?.addEventListener('change', () => updateActivitySettings({
+    notifyCafePosts: !!els.activityNotifyCafeInput.checked
+  }));
+  els.activityDisableLiveChatInput?.addEventListener('change', () => updateActivitySettings({
+    disableLiveChatInput: !!els.activityDisableLiveChatInput.checked
+  }));
+  els.activityDisableDonationInput?.addEventListener('change', () => updateActivitySettings({
+    disableLiveDonationButtons: !!els.activityDisableDonationInput.checked
   }));
 }
 
@@ -173,11 +233,12 @@ async function loadActivityState() {
       streamers: response.streamers || [],
       events: response.events || [],
       states: response.states || {},
+      settings: normalizeActivitySettings(response.settings),
       lastRun: response.lastRun || null
     };
     await mergeActivityChannels();
   } else {
-    activityState = { streamers: [], events: [], states: {}, lastRun: null };
+    activityState = { streamers: [], events: [], states: {}, settings: defaultActivitySettings(), lastRun: null };
   }
 }
 
@@ -282,13 +343,13 @@ async function applySort(shuffleWithinTiers) {
   return !!response?.ok;
 }
 
-async function applySortQuietly(successMessage) {
+async function applySortQuietly(successMessage, options = {}) {
   if (!chzzkTab || lastDetectedCount === 0) {
     els.connectionText.textContent = successMessage;
     return false;
   }
 
-  const response = await sendToTab({ type: 'APPLY_TIER_SORT' });
+  const response = await sendToTab({ type: 'APPLY_TIER_SORT', ...options });
   els.connectionText.textContent = response?.ok ? '저장하고 현재 탭에 반영했습니다.' : successMessage;
   return !!response?.ok;
 }
@@ -469,10 +530,20 @@ function createCard(channel, tierId, draggable, action = 'remove') {
     draggedId = channel.id;
   });
 
+  card.addEventListener('dragend', () => {
+    draggedId = null;
+    stopDragAutoScroll();
+    document.querySelectorAll('.drop-zone.drag-over, .streamer-card.drop-before, .streamer-card.drop-after')
+      .forEach(element => element.classList.remove('drag-over', 'drop-before', 'drop-after'));
+  });
+
   card.querySelector('.mini').addEventListener('click', async () => {
     await runExclusive(action === 'add' ? '즐겨찾기에 추가하는 중입니다.' : '즐겨찾기에서 제거하는 중입니다.', async () => {
       await store.setStarred(channel.id, action === 'add', channel);
-      await applySortQuietly(action === 'add' ? '즐겨찾기에 추가했습니다.' : '즐겨찾기에서 제거했습니다.');
+      await applySortQuietly(
+        action === 'add' ? '즐겨찾기에 추가했습니다.' : '즐겨찾기에서 제거했습니다.',
+        action === 'add' ? { pinChannelId: channel.id } : {}
+      );
       render();
       focusChannelMini(channel.id, action === 'add' ? '.unassigned' : '.all-channels');
     });
@@ -506,6 +577,7 @@ function attachDropZone(zone) {
   zone.addEventListener('dragover', (event) => {
     event.preventDefault();
     zone.classList.add('drag-over');
+    scheduleDragAutoScroll(event);
     const targetCard = event.target.closest?.('.streamer-card');
     zone.querySelectorAll('.streamer-card').forEach(card => card.classList.remove('drop-before', 'drop-after'));
     if (targetCard && targetCard.dataset.channelId !== draggedId) {
@@ -515,9 +587,11 @@ function attachDropZone(zone) {
   zone.addEventListener('dragleave', () => {
     zone.classList.remove('drag-over');
     zone.querySelectorAll('.streamer-card').forEach(card => card.classList.remove('drop-before', 'drop-after'));
+    stopDragAutoScroll();
   });
   zone.addEventListener('drop', async (event) => {
     event.preventDefault();
+    stopDragAutoScroll();
     zone.classList.remove('drag-over');
     zone.querySelectorAll('.streamer-card').forEach(card => card.classList.remove('drop-before', 'drop-after'));
     if (!draggedId || isWorking) return;
@@ -551,15 +625,12 @@ function orderedDropIds(zone, event, channelId) {
     .map(card => card.dataset.channelId)
     .filter(id => id && id !== channelId);
   const targetCard = event.target.closest?.('.streamer-card');
-  if (!targetCard || targetCard.dataset.channelId === channelId) {
-    return [...cards, channelId];
-  }
-
-  const targetId = targetCard.dataset.channelId;
-  const targetIndex = cards.indexOf(targetId);
-  if (targetIndex < 0) return [...cards, channelId];
-  const insertIndex = dropBeforeCard(event, targetCard) ? targetIndex : targetIndex + 1;
-  return [...cards.slice(0, insertIndex), channelId, ...cards.slice(insertIndex)];
+  return window.ChzzkSidebarDnd.computeOrderedDropIds(
+    cards,
+    channelId,
+    targetCard?.dataset.channelId || '',
+    !!(targetCard && targetCard.dataset.channelId !== channelId && dropBeforeCard(event, targetCard))
+  );
 }
 
 function dropBeforeCard(event, card) {
@@ -597,23 +668,224 @@ function cardMetaText(channel, tierId, action) {
 function renderActivity() {
   if (!els.activityList || !els.activityCount) return;
   const events = activityState.events || [];
-  els.activityCount.textContent = String((activityState.streamers || []).length);
+  const streamers = activityState.streamers || [];
+  const settings = normalizeActivitySettings(activityState.settings);
+  els.activityCount.textContent = String(streamers.length);
+  if (els.activityMonitorToggleBtn) {
+    const isMonitoring = settings.isMonitoring !== false;
+    els.activityMonitorToggleBtn.textContent = isMonitoring ? '자동 추적 켜짐' : '자동 추적 꺼짐';
+    els.activityMonitorToggleBtn.setAttribute('aria-pressed', String(isMonitoring));
+  }
+  if (els.activityIntervalInput && document.activeElement !== els.activityIntervalInput) {
+    els.activityIntervalInput.value = String(settings.intervalMinutes);
+  }
+  if (els.activityNotifyLiveStartInput) els.activityNotifyLiveStartInput.checked = settings.notifyLiveStart !== false;
+  if (els.activityNotifyTitleInput) els.activityNotifyTitleInput.checked = settings.notifyTitleChange !== false;
+  if (els.activityNotifyCafeInput) els.activityNotifyCafeInput.checked = settings.notifyCafePosts !== false;
+  if (els.activityDisableLiveChatInput) els.activityDisableLiveChatInput.checked = settings.disableLiveChatInput === true;
+  if (els.activityDisableDonationInput) els.activityDisableDonationInput.checked = settings.disableLiveDonationButtons === true;
   els.activityList.textContent = '';
-  if (!events.length) {
-    els.activityList.appendChild(emptyNode((activityState.streamers || []).length ? '아직 새 활동 없음' : '추적 채널 없음'));
+  if (!streamers.length && !events.length) {
+    els.activityList.appendChild(emptyNode('추적 채널 없음'));
     return;
   }
-  events.slice(0, 5).forEach((event) => {
-    const item = document.createElement('a');
-    item.className = 'activity-item';
-    item.href = event.url || '#';
-    item.target = '_blank';
-    item.rel = 'noreferrer';
+  streamers.forEach((streamer) => {
+    const liveState = activityState.states?.[streamer.channelId] || {};
+    const item = document.createElement('div');
+    item.className = 'activity-item streamer-activity-row';
+    item.dataset.channelId = streamer.channelId || '';
     item.innerHTML = `
+      <div class="activity-copy">
+        <strong>${escapeText(streamer.name || liveState.channelName || streamer.channelId || '스트리머')}</strong>
+        <span>${escapeText(activitySummaryText(streamer, liveState))}</span>
+      </div>
+      <div class="activity-notification-controls" aria-label="${escapeAttr(streamer.name || streamer.channelId || '스트리머')} 알림 설정">
+        ${activityNotificationToggle(streamer, 'liveStart', '방송')}
+        ${activityNotificationToggle(streamer, 'titleChange', '제목')}
+        ${activityNotificationToggle(streamer, 'cafePosts', '카페')}
+      </div>
+      <div class="activity-row-actions">
+        <button class="tiny" type="button" data-activity-toggle="${escapeAttr(streamer.id || streamer.channelId)}" aria-pressed="${streamer.enabled !== false}">${streamer.enabled === false ? '켜기' : '끄기'}</button>
+        <button class="tiny danger-text" type="button" data-activity-remove="${escapeAttr(streamer.id || streamer.channelId)}">삭제</button>
+      </div>
+    `;
+    item.querySelector('[data-activity-toggle]')?.addEventListener('click', () => updateActivityStreamer(streamer.id || streamer.channelId, streamer.enabled === false));
+    item.querySelector('[data-activity-remove]')?.addEventListener('click', () => removeActivityStreamer(streamer.id || streamer.channelId));
+    item.querySelectorAll('[data-activity-notification]').forEach((input) => {
+      input.addEventListener('change', () => updateActivityStreamerNotifications(streamer.id || streamer.channelId, {
+        [input.dataset.activityNotification]: !!input.checked
+      }));
+    });
+    els.activityList.appendChild(item);
+  });
+  events.slice(0, 5).forEach((event) => {
+    const item = document.createElement('div');
+    item.className = 'activity-item activity-event-row';
+    const eventContent = `
       <strong>${escapeText(event.title || '새 활동')}</strong>
       <span>${escapeText(event.message || event.createdAt || '')}</span>
     `;
+    const eventLink = isSafeActivityEventUrl(event.url)
+      ? `<a class="activity-event-link" href="${escapeAttr(event.url)}" target="_blank" rel="noopener noreferrer">${eventContent}</a>`
+      : `<div class="activity-event-link" aria-disabled="true">${eventContent}</div>`;
+    item.innerHTML = `
+      ${eventLink}
+      <button class="tiny danger-text" type="button" data-activity-event-remove="${escapeAttr(event.id || '')}">삭제</button>
+    `;
+    item.querySelector('[data-activity-event-remove]')?.addEventListener('click', () => removeActivityEvent(event.id));
     els.activityList.appendChild(item);
+  });
+}
+
+function scheduleDragAutoScroll(event) {
+  const delta = window.ChzzkSidebarDnd.computeAutoScrollDelta(
+    event.clientY,
+    window.innerHeight || document.documentElement.clientHeight
+  );
+  dragAutoScrollDelta = delta;
+  if (!delta) {
+    stopDragAutoScroll();
+    return;
+  }
+
+  if (dragAutoScrollTimer) return;
+  dragAutoScrollTimer = window.setInterval(() => {
+    window.scrollBy({ top: dragAutoScrollDelta, left: 0, behavior: 'auto' });
+  }, 50);
+}
+
+function stopDragAutoScroll() {
+  if (!dragAutoScrollTimer) return;
+  window.clearInterval(dragAutoScrollTimer);
+  dragAutoScrollTimer = null;
+  dragAutoScrollDelta = 0;
+}
+
+function activitySummaryText(streamer, liveState) {
+  const parts = [];
+  if (streamer.channelId) parts.push(liveState.isLive ? '방송 중' : '방송 꺼짐');
+  if (streamer.cafe?.cafeName) parts.push(`카페 ${streamer.cafe.cafeRealName || streamer.cafe.cafeName}`);
+  return parts.length ? parts.join(' · ') : '연결 없음';
+}
+
+function activityNotificationToggle(streamer, key, label) {
+  const checked = streamer.notifications?.[key] !== false ? ' checked' : '';
+  return `
+    <label class="activity-notification-toggle">
+      <input type="checkbox" data-activity-notification="${escapeAttr(key)}"${checked}>
+      <span>${escapeText(label)}</span>
+    </label>
+  `;
+}
+
+function defaultActivitySettings() {
+  return {
+    intervalMinutes: 5,
+    isMonitoring: true,
+    notifyLiveStart: true,
+    notifyTitleChange: true,
+    notifyCafePosts: true,
+    disableLiveChatInput: false,
+    disableLiveDonationButtons: false
+  };
+}
+
+function normalizeActivitySettings(value) {
+  const settings = { ...defaultActivitySettings(), ...(value || {}) };
+  settings.intervalMinutes = Math.max(1, Math.min(60, Number(settings.intervalMinutes) || 5));
+  settings.isMonitoring = settings.isMonitoring !== false;
+  settings.notifyLiveStart = settings.notifyLiveStart !== false;
+  settings.notifyTitleChange = settings.notifyTitleChange !== false;
+  settings.notifyCafePosts = settings.notifyCafePosts !== false;
+  settings.disableLiveChatInput = settings.disableLiveChatInput === true;
+  settings.disableLiveDonationButtons = settings.disableLiveDonationButtons === true;
+  return settings;
+}
+
+function isSafeActivityEventUrl(value) {
+  try {
+    const url = new URL(String(value || ''));
+    if (url.protocol !== 'https:') return false;
+    const host = url.hostname.toLowerCase();
+    return host === 'chzzk.naver.com' ||
+      host === 'cafe.naver.com' ||
+      host.endsWith('.cafe.naver.com');
+  } catch {
+    return false;
+  }
+}
+
+async function updateActivitySettings(settings) {
+  await runExclusive('활동 추적 설정을 저장하는 중입니다.', async () => {
+    const response = await platform.sendRuntimeMessage?.({ type: 'ACTIVITY_SAVE_SETTINGS', settings }).catch(error => ({ ok: false, error: error.message || String(error) }));
+    if (!response?.ok) {
+      els.connectionText.textContent = '활동 추적 설정을 저장하지 못했습니다.';
+      renderActivity();
+      return false;
+    }
+    activityState = {
+      ...activityState,
+      settings: normalizeActivitySettings(response.settings)
+    };
+    els.connectionText.textContent = '활동 추적 설정을 저장했습니다.';
+    render();
+    return true;
+  });
+}
+
+async function updateActivityStreamer(id, enabled) {
+  await runExclusive('추적 상태를 저장하는 중입니다.', async () => {
+    const response = await platform.sendRuntimeMessage?.({ type: 'ACTIVITY_TOGGLE_STREAMER', id, enabled }).catch(error => ({ ok: false, error: error.message || String(error) }));
+    if (!response?.ok) {
+      els.connectionText.textContent = '추적 상태를 저장하지 못했습니다.';
+      return false;
+    }
+    await loadActivityState();
+    render();
+    return true;
+  });
+}
+
+async function updateActivityStreamerNotifications(id, notifications) {
+  await runExclusive('스트리머 알림 설정을 저장하는 중입니다.', async () => {
+    const response = await platform.sendRuntimeMessage?.({ type: 'ACTIVITY_UPDATE_STREAMER_NOTIFICATIONS', id, notifications }).catch(error => ({ ok: false, error: error.message || String(error) }));
+    if (!response?.ok) {
+      els.connectionText.textContent = '스트리머 알림 설정을 저장하지 못했습니다.';
+      return false;
+    }
+    await loadActivityState();
+    render();
+    return true;
+  });
+}
+
+async function removeActivityStreamer(id) {
+  await runExclusive('추적 채널을 삭제하는 중입니다.', async () => {
+    const response = await platform.sendRuntimeMessage?.({ type: 'ACTIVITY_REMOVE_STREAMER', id }).catch(error => ({ ok: false, error: error.message || String(error) }));
+    if (!response?.ok) {
+      els.connectionText.textContent = '추적 채널을 삭제하지 못했습니다.';
+      return false;
+    }
+    await loadActivityState();
+    render();
+    return true;
+  });
+}
+
+async function removeActivityEvent(id) {
+  if (!id) return;
+  await runExclusive('활동 기록을 삭제하는 중입니다.', async () => {
+    const response = await platform.sendRuntimeMessage?.({ type: 'ACTIVITY_REMOVE_EVENT', id }).catch(error => ({ ok: false, error: error.message || String(error) }));
+    if (!response?.ok) {
+      els.connectionText.textContent = '활동 기록을 삭제하지 못했습니다.';
+      return false;
+    }
+    activityState = {
+      ...activityState,
+      events: response.events || []
+    };
+    render();
+    return true;
   });
 }
 
