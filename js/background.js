@@ -464,7 +464,7 @@ async function runActivityCheck(reason = 'manual') {
     }
   }
 
-  const cafeResult = await checkCafeActivity(state).catch((error) => {
+  const cafeResult = await checkCafeActivity({ ...state, streamers: nextStreamers }).catch((error) => {
     errors.push(error.message || String(error));
     return { checked: 0, events: [] };
   });
@@ -480,7 +480,9 @@ async function runActivityCheck(reason = 'manual') {
     [ACTIVITY_KEYS.events]: trimmedEvents,
     [ACTIVITY_KEYS.lastRun]: lastRun
   };
-  if (streamersChanged) writes[ACTIVITY_KEYS.streamers] = nextStreamers;
+  if (streamersChanged || cafeResult.streamersChanged) {
+    writes[ACTIVITY_KEYS.streamers] = cafeResult.streamers || nextStreamers;
+  }
   await storageSet(writes);
   return { ok: true, checked, states: nextStates, events: trimmedEvents, settings: state.settings, lastRun };
 }
@@ -507,7 +509,7 @@ async function checkCafeActivity(state) {
   const lastSeen = stored?.[ACTIVITY_KEYS.cafeLastSeen] || {};
   const cafeCursors = stored?.[ACTIVITY_KEYS.cafeCursors] || {};
   const cafeRecovery = stored?.[ACTIVITY_KEYS.cafeRecovery] || {};
-  const streamers = Array.isArray(stored?.[ACTIVITY_KEYS.streamers]) ? stored[ACTIVITY_KEYS.streamers] : state.streamers;
+  const streamers = Array.isArray(state.streamers) ? state.streamers : stored?.[ACTIVITY_KEYS.streamers];
   const nextSeen = { ...lastSeen };
   const nextCursors = { ...cafeCursors };
   const nextRecovery = {
@@ -520,6 +522,7 @@ async function checkCafeActivity(state) {
   const recentByCafe = new Map();
   let checked = 0;
   let recoveryChanged = cafeRecovery.version !== CAFE_RECOVERY_VERSION;
+  let streamersChanged = false;
 
   for (const unit of nextStreamers) {
     if (
@@ -529,10 +532,19 @@ async function checkCafeActivity(state) {
       !unit.cafe?.nickname
     ) continue;
     const cafe = unit.cafe;
-    if (!cafe.cafeId) {
+    if (!cafe.cafeId || isLikelyMojibake(cafe.cafeRealName)) {
       const info = await resolveCafeInfo(cafe.cafeName);
-      cafe.cafeId = info.cafeId || '';
-      cafe.cafeRealName = info.cafeRealName || cafe.cafeRealName || cafe.cafeName;
+      if (!cafe.cafeId) {
+        cafe.cafeId = info.cafeId || '';
+        streamersChanged = true;
+      }
+      if (info.cafeRealName && !isLikelyMojibake(info.cafeRealName)) {
+        cafe.cafeRealName = info.cafeRealName;
+        streamersChanged = true;
+      } else if (!cafe.cafeRealName) {
+        cafe.cafeRealName = cafe.cafeName;
+        streamersChanged = true;
+      }
     }
     if (!cafe.cafeId) continue;
     const cursorKey = cafe.cafeId || cafe.cafeName;
@@ -582,7 +594,7 @@ async function checkCafeActivity(state) {
   };
   if (recoveryChanged) writes[ACTIVITY_KEYS.cafeRecovery] = nextRecovery;
   await storageSet(writes);
-  return { checked, events };
+  return { checked, events, streamersChanged, streamers: nextStreamers };
 }
 
 async function resolveCafeInfo(cafeName) {
@@ -590,13 +602,45 @@ async function resolveCafeInfo(cafeName) {
     credentials: 'omit',
     cache: 'no-store'
   });
-  const html = await response.text();
+  const html = await readCafeHtml(response);
   const idMatch = html.match(/(?:"clubId"\s*:\s*|clubid=|"cafeId"\s*:\s*)(\d+)/i);
   const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
   return {
     cafeId: idMatch ? idMatch[1] : '',
     cafeRealName: titleMatch ? titleMatch[1].replace(/\s*:\s*네이버 카페\s*$/i, '').trim() : cafeName
   };
+}
+
+async function readCafeHtml(response) {
+  if (!response?.arrayBuffer) {
+    return response?.text ? response.text() : '';
+  }
+  const buffer = await response.arrayBuffer();
+  const headerCharset = response.headers?.get?.('content-type')?.match(/charset=([^;]+)/i)?.[1]?.trim().toLowerCase();
+  const asciiHead = new TextDecoder('ascii').decode(buffer.slice(0, 4096));
+  const metaCharset = asciiHead.match(/charset=["']?\s*([a-z0-9_-]+)/i)?.[1]?.toLowerCase();
+  const charset = cafeCharsetLabel(headerCharset || metaCharset || 'utf-8');
+  try {
+    return new TextDecoder(charset).decode(buffer);
+  } catch {
+    return new TextDecoder('utf-8').decode(buffer);
+  }
+}
+
+function cafeCharsetLabel(charset) {
+  const label = String(charset || '').toLowerCase();
+  return /^(ms949|cp949|ksc5601|ks_c_5601-1987|euc-?kr|windows-949|x-windows-949)$/.test(label)
+    ? 'euc-kr'
+    : (label || 'utf-8');
+}
+
+function isLikelyMojibake(value) {
+  const text = String(value || '');
+  if (!text) return false;
+  if (text.includes('�')) return true;
+  const suspect = (text.match(/[\u0080-\u00ff]/g) || []).length;
+  const hangul = (text.match(/[가-힣]/g) || []).length;
+  return suspect >= 2 && hangul === 0;
 }
 
 async function fetchCafeArticlesSince(cafe, lastNewestArticleId) {

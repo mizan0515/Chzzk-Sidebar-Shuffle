@@ -58,7 +58,7 @@ async function main() {
         cafe: {
           cafeName: 'recovery-cafe',
           cafeId: '987654',
-          cafeRealName: 'Recovery Cafe',
+          cafeRealName: 'Ã¬Â•ÂŒÃ­ÂŒÂŒ',
           nickname: 'RecoveryWriter'
         },
         enabled: true,
@@ -156,6 +156,12 @@ async function main() {
         return {
           ok: true,
           text: async () => '<html><head><title>Legacy Cafe : 네이버 카페</title></head><body>"clubId": 555555</body></html>'
+        };
+      }
+      if (text.includes('cafe.naver.com/recovery-cafe')) {
+        return {
+          ok: true,
+          text: async () => '<html><head><title>Recovery Cafe : 네이버 카페</title></head><body>"clubId": 987654</body></html>'
         };
       }
       if (text.includes('ArticleListV2.json')) {
@@ -351,6 +357,11 @@ async function main() {
   assert.equal(notifications.length, 2);
   assert.match(notifications[0].id, /^live_0123456789abcdef0123456789abcdef_/);
   assert.match(notifications[1].id, /^cafe_recovery-cafe_42_/);
+  assert.equal(
+    storage.satChzzkStreamers.find(unit => unit.id === 'recovery-cafe-unit').cafe.cafeRealName,
+    'Recovery Cafe',
+    'Existing cafe activity rows should refresh mojibake cafe names even when cafeId is already stored'
+  );
   assert.equal(runResponse.states['ffffffffffffffffffffffffffffffff'].isLive, false);
   assert.equal(runResponse.states['ffffffffffffffffffffffffffffffff'].channelName, 'Offline Alpha');
   assert.equal(runResponse.states['ffffffffffffffffffffffffffffffff'].error, undefined);
