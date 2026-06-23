@@ -404,10 +404,23 @@ async function openActivityNotification(notificationId) {
   if (!notificationId || openedNotificationIds.has(notificationId)) return;
   const state = await getActivityState();
   const event = (state.events || []).find(item => item.id === notificationId);
-  if (!event?.url || !chromeApi?.tabs?.create) return;
+  if (!event?.url || !isSafeActivityEventUrl(event.url) || !chromeApi?.tabs?.create) return;
   openedNotificationIds.add(notificationId);
   chromeApi?.notifications?.clear?.(notificationId, () => undefined);
   await chromeApi.tabs.create({ url: event.url });
+}
+
+function isSafeActivityEventUrl(value) {
+  try {
+    const url = new URL(String(value || ''));
+    if (url.protocol !== 'https:') return false;
+    const host = url.hostname.toLowerCase();
+    return host === 'chzzk.naver.com' ||
+      host === 'cafe.naver.com' ||
+      host.endsWith('.cafe.naver.com');
+  } catch {
+    return false;
+  }
 }
 
 async function runActivityCheck(reason = 'manual') {

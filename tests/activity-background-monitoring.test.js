@@ -408,6 +408,15 @@ async function main() {
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(openedTabs.length, 1, 'Repeated notification click events for the same notification must not open duplicate tabs');
 
+  storage.satEvents.unshift({
+    id: 'unsafe-event',
+    url: 'https://example.test/not-a-chzzk-activity'
+  });
+  await notificationClickListener('unsafe-event');
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(openedTabs.length, 1, 'Unsafe activity notification URLs must not open arbitrary tabs');
+  assert.deepEqual(clearedNotifications, [notifications[0].id]);
+
   const stoppedResponse = await context.handleActivityMessage({ type: 'ACTIVITY_STOP_MONITORING' });
   assert.equal(stoppedResponse.ok, true);
   assert.equal(stoppedResponse.settings.isMonitoring, false);
