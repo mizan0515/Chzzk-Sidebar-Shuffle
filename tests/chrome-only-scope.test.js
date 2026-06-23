@@ -68,6 +68,8 @@ assert.match(storeAssetGenerator, /03-tier-manager\.png/, 'Chrome store screensh
 assert.doesNotMatch(mainChromePopupQa, /direct-popup-url-fallback|Target\.createTarget|popup\.html`\s*\}/, 'Main Chrome popup QA must not substitute direct popup URL for the extension action');
 assert.match(mainChromePopupQa, /Real extension action popup did not open/, 'Main Chrome popup QA should fail clearly when the real action popup cannot be opened');
 assert.match(mainChromePopupQa, /requireCdpReady/, 'Main Chrome popup QA should verify the CDP endpoint before claiming main-browser evidence');
+assert.doesNotMatch(mainChromePopupQa, /targets\.find\(item => item\.type === 'page' && !item\.url\?\.startsWith\('chrome-extension:\/\/'\)\)/, 'Main Chrome popup QA must not fall back to any non-extension page when the CHZZK tab is unavailable');
+assert.match(mainChromePopupQa, /Manager-visible CHZZK page target did not come to front/, 'Main Chrome popup QA should fail before action.openPopup when no CHZZK page target is exposed');
 assert.match(mainChromePopupQa, /mainBrowserEvidence:\s*popupOpened/, 'Main Chrome popup QA failures before action.openPopup must not claim main-browser evidence');
 assert.match(mainChromePopupQa, /MAIN_CHROME_POPUP_UNVERIFIED/, 'Main Chrome popup QA should classify pre-popup failures as unverified, not real-use failures');
 

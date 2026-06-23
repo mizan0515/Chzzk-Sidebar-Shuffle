@@ -85,8 +85,7 @@ async function waitForPopup(extensionId) {
 
 async function bringContentPageToFront() {
   const targets = await json('/json/list');
-  const page = targets.find(item => item.type === 'page' && item.url?.startsWith('https://chzzk.naver.com/')) ||
-    targets.find(item => item.type === 'page' && !item.url?.startsWith('chrome-extension://'));
+  const page = targets.find(item => item.type === 'page' && item.url?.startsWith('https://chzzk.naver.com/'));
   if (!page) return { ok: false, error: 'content page target not found' };
   const client = makeClient(page);
   await client.ready;
@@ -119,6 +118,9 @@ async function main() {
   const cdpVersion = await requireCdpReady();
   const { client: workerClient, extensionId, manifest } = await findExtensionWorker();
   const bringToFront = await bringContentPageToFront();
+  if (!bringToFront.ok) {
+    throw new Error(`Manager-visible CHZZK page target did not come to front: ${bringToFront.error || 'unknown error'}`);
+  }
   const openResult = await evaluate(workerClient, `new Promise(resolve => {
     try {
       if (!chrome.action?.openPopup) {
