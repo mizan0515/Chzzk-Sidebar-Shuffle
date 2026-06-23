@@ -37,6 +37,19 @@ async function main() {
         },
         createdAt: '2026-06-20T00:00:00.000Z',
         profileImageUrl: 'https://example.test/cafe.png'
+      },
+      {
+        id: 'offline-unit',
+        name: 'Offline Alpha',
+        channelId: 'ffffffffffffffffffffffffffffffff',
+        cafe: null,
+        enabled: true,
+        notifications: {
+          liveStart: true,
+          titleChange: true,
+          cafePosts: true
+        },
+        profileImageUrl: ''
       }
     ],
     satCafeSubscriptions: [
@@ -82,6 +95,41 @@ async function main() {
     URL,
     fetch: async (url) => {
       const text = String(url);
+      if (text.includes('/service/v1/channels/ffffffffffffffffffffffffffffffff')) {
+        return {
+          ok: true,
+          json: async () => ({
+            content: {
+              channelImageUrl: 'https://example.test/offline-profile.png'
+            }
+          })
+        };
+      }
+      if (text.includes('/polling/v2/channels/ffffffffffffffffffffffffffffffff/live-status')) {
+        return {
+          ok: true,
+          json: async () => ({
+            code: 404,
+            content: null
+          })
+        };
+      }
+      if (text.includes('/polling/v2/channels/0123456789abcdef0123456789abcdef/live-status')) {
+        return {
+          ok: true,
+          json: async () => ({
+            code: 200,
+            content: {
+              status: 'OPEN',
+              liveTitle: 'Live now',
+              channel: {
+                channelName: 'Alpha',
+                channelImageUrl: 'https://example.test/profile.png'
+              }
+            }
+          })
+        };
+      }
       if (text.includes('ArticleListV2.json')) {
         return {
           ok: true,
@@ -238,10 +286,18 @@ async function main() {
 
   const runResponse = await context.handleActivityMessage({ type: 'ACTIVITY_RUN_NOW' });
   assert.equal(runResponse.ok, true);
-  assert.equal(runResponse.checked, 1);
+  assert.equal(runResponse.checked, 2);
   assert.equal(runResponse.settings.intervalMinutes, 7);
   assert.equal(notifications.length, 1);
   assert.match(notifications[0].id, /^live_0123456789abcdef0123456789abcdef_/);
+  assert.equal(runResponse.states['ffffffffffffffffffffffffffffffff'].isLive, false);
+  assert.equal(runResponse.states['ffffffffffffffffffffffffffffffff'].channelName, 'Offline Alpha');
+  assert.equal(runResponse.states['ffffffffffffffffffffffffffffffff'].error, undefined);
+  assert.equal(
+    storage.satChzzkStreamers.find(unit => unit.id === 'offline-unit').profileImageUrl,
+    'https://example.test/offline-profile.png',
+    'Offline CHZZK activity channels should seed a profile image without becoming live'
+  );
   assert.equal(storage.satEvents.length, 1);
   assert.equal(storage.satCafeCursors['123456'], '9');
   assert.deepEqual(JSON.parse(JSON.stringify(storage.satCafeLastSeen['alpha-cafe:AlphaWriter'])), []);

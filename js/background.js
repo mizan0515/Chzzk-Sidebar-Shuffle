@@ -237,6 +237,9 @@ async function addActivityStreamer(input) {
   if (!core?.buildStreamerUnit) return { ok: false, error: 'Activity core unavailable' };
   const built = core.buildStreamerUnit(input);
   if (!built.ok) return { ok: false, error: built.error };
+  if (built.unit.channelId && !built.unit.profileImageUrl) {
+    built.unit.profileImageUrl = await fetchChzzkChannelProfile(built.unit.channelId);
+  }
   const state = await getActivityState();
   const streamers = upsertActivityUnit(state.streamers, built.unit);
   await storageSet({ [ACTIVITY_KEYS.streamers]: streamers });
@@ -388,18 +391,31 @@ async function runActivityCheck(reason = 'manual') {
   const previousStates = state.states || {};
   const nextStates = { ...previousStates };
   const nextEvents = [...(state.events || [])];
+  const nextStreamers = (state.streamers || []).map(streamer => ({ ...streamer }));
   const errors = [];
   let checked = 0;
+  let streamersChanged = false;
 
-  for (const streamer of state.streamers.filter(item => item.enabled !== false && item.channelId)) {
+  for (const streamer of nextStreamers.filter(item => item.enabled !== false && item.channelId)) {
     try {
       const live = await fetchChzzkLiveStatus(streamer.channelId);
       const current = core.normalizeChzzkLiveStatus(live, streamer.channelId);
+      if (!current.channelName && streamer.name) current.channelName = streamer.name;
+      if (current.profileImageUrl && current.profileImageUrl !== streamer.profileImageUrl) {
+        streamer.profileImageUrl = current.profileImageUrl;
+        streamersChanged = true;
+      } else if (!streamer.profileImageUrl) {
+        const seeded = await fetchChzzkChannelProfile(streamer.channelId);
+        if (seeded) {
+          streamer.profileImageUrl = seeded;
+          streamersChanged = true;
+        }
+      }
       const previous = previousStates[streamer.channelId];
       const events = core.detectChzzkEvents(previous, current, {
         notifyLiveStart: state.settings?.notifyLiveStart !== false && streamer.notifications?.liveStart !== false,
         notifyTitleChange: state.settings?.notifyTitleChange !== false && streamer.notifications?.titleChange !== false,
-        profileImageUrl: streamer.profileImageUrl
+        profileImageUrl: streamer.profileImageUrl || current.profileImageUrl
       });
       nextStates[streamer.channelId] = current;
       for (const event of events) {
@@ -430,11 +446,13 @@ async function runActivityCheck(reason = 'manual') {
 
   const trimmedEvents = nextEvents.slice(0, 80);
   const lastRun = { checkedAt: new Date().toISOString(), reason, errors };
-  await storageSet({
+  const writes = {
     [ACTIVITY_KEYS.states]: nextStates,
     [ACTIVITY_KEYS.events]: trimmedEvents,
     [ACTIVITY_KEYS.lastRun]: lastRun
-  });
+  };
+  if (streamersChanged) writes[ACTIVITY_KEYS.streamers] = nextStreamers;
+  await storageSet(writes);
   return { ok: true, checked, states: nextStates, events: trimmedEvents, settings: state.settings, lastRun };
 }
 
@@ -581,12 +599,36 @@ function normalizeText(value) {
 }
 
 async function fetchChzzkLiveStatus(channelId) {
-  const response = await fetch(`https://api.chzzk.naver.com/service/v2/channels/${encodeURIComponent(channelId)}/live-detail`, {
+  const pollingResponse = await fetch(`https://api.chzzk.naver.com/polling/v2/channels/${encodeURIComponent(channelId)}/live-status`, {
     credentials: 'omit',
     cache: 'no-store'
   });
-  if (!response.ok) throw new Error(`CHZZK API ${response.status}`);
-  return response.json();
+  if (pollingResponse.ok) {
+    const payload = await pollingResponse.json();
+    if (payload?.code === 200 && payload?.content) return payload;
+    return { content: { status: 'CLOSED' } };
+  }
+
+  const detailResponse = await fetch(`https://api.chzzk.naver.com/service/v2/channels/${encodeURIComponent(channelId)}/live-detail`, {
+    credentials: 'omit',
+    cache: 'no-store'
+  });
+  if (!detailResponse.ok) return { content: { status: 'CLOSED' } };
+  return detailResponse.json();
+}
+
+async function fetchChzzkChannelProfile(channelId) {
+  try {
+    const response = await fetch(`https://api.chzzk.naver.com/service/v1/channels/${encodeURIComponent(channelId)}`, {
+      credentials: 'omit',
+      cache: 'no-store'
+    });
+    if (!response.ok) return '';
+    const payload = await response.json();
+    return normalizeText(payload?.content?.channelImageUrl);
+  } catch {
+    return '';
+  }
 }
 
 async function copyTimecodeFromActiveTab() {
