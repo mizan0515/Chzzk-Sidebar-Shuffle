@@ -34,4 +34,16 @@ assert.match(
   'Page cleanup should use the shared observer cleanup path'
 );
 
+assert.match(
+  contentJs,
+  /clickExpandButton\(moreButton, 'shuffle-recovery'/,
+  'Wide-mode shuffle recovery should route automatic expand clicks through the MoreButton manager'
+);
+
+assert.doesNotMatch(
+  contentJs,
+  /moreButton\.click\(\)/,
+  'Content recovery should not bypass the guarded MoreButton manager with direct DOM clicks'
+);
+
 console.log('content observer cleanup regression passed');

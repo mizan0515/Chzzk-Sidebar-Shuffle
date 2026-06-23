@@ -664,13 +664,13 @@
 
               if (isCollapsed) {
                 window.ChzzkLogger?.info('🔘 [SHUFFLE RECOVERY] 더보기 버튼이 접힌 상태 - 자동 클릭 실행');
-                moreButton.click();
-
-                // 더보기 버튼 클릭 후 충분한 시간 대기
-                setTimeout(() => {
-                  window.ChzzkLogger?.info('🔘 [SHUFFLE RECOVERY] 더보기 버튼 클릭 후 대기 완료 - 셔플 시작');
-                  performShuffleAfterExpand(attempt, maxAttempts);
-                }, 1500); // 1.5초 대기
+                window.ChzzkMoreButton.clickExpandButton(moreButton, 'shuffle-recovery', () => {
+                  // 더보기 버튼 클릭 후 충분한 시간 대기
+                  setTimeout(() => {
+                    window.ChzzkLogger?.info('🔘 [SHUFFLE RECOVERY] 더보기 버튼 클릭 후 대기 완료 - 셔플 시작');
+                    performShuffleAfterExpand(attempt, maxAttempts);
+                  }, 1300); // clickExpandButton already waits for the first state check.
+                });
                 return;
               } else {
                 window.ChzzkLogger?.info('🔘 [SHUFFLE RECOVERY] 더보기 버튼이 이미 펼쳐진 상태 - 바로 셔플 진행');
