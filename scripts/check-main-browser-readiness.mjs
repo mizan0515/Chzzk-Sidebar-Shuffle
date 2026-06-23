@@ -80,7 +80,7 @@ async function main() {
     },
     nextAction: mainChromeAttachReady
     ? 'Use the existing main Chrome CDP endpoint for real-use QA. The next proof must click/open the Chrome extension action popup, not a direct popup URL.'
-    : 'Main Chrome is not controllable yet. Do not substitute isolated QA. Use Computer Use against the manager-visible Chrome window or ask the manager to provide/enable a controllable Chrome plugin session.'
+    : 'Main Chrome is not controllable yet. Do not substitute isolated QA or ask the manager to choose browser tooling. Keep PR #5 Draft and retry only when manager-visible Chrome is foreground on chzzk.naver.com with the toolbar/action area visible, or when an approved Chrome/CDP/Computer Use route exposes the real extension action popup internals by label.'
   };
 
   console.log(JSON.stringify(result, null, 2));

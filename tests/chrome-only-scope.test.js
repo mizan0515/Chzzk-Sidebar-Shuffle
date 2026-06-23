@@ -30,6 +30,8 @@ assert.match(buildScript, /default_title:\s*'CHZZK Favorites & Tiers'/, 'Built C
 assert.match(readme, /Chrome-only/i, 'README should state the Chrome-only product scope');
 assert.doesNotMatch(readme, /build:whale|qa:whale:isolated|qa:main:whale|dist\/whale|Whale Store/i, 'README must not instruct managers to build, QA, or release Whale');
 assert.doesNotMatch(readme, /requires static validation, Chrome build, isolated Chromium/i, 'README completion gate must not make isolated Chromium part of Chrome-only release readiness');
+assert.doesNotMatch(readme, /ask the manager to .*provide|provide a controllable Chrome plugin|enable a controllable Chrome plugin/i, 'README must not hand browser QA mechanics back to the non-developer manager');
+assert.match(readme, /keep the PR draft[\s\S]*manager-visible Chrome is foreground[\s\S]*real extension action popup internals by label/, 'README should give the exact bounded retry condition when main Chrome evidence is unavailable');
 
 assert.match(buildScript, /target === 'all' \? \['chrome'\]/, 'build:all should build only Chrome');
 assert.doesNotMatch(buildScript, /manifest\.sidebar_action\s*=|default_page|sidebar_action\s*=/i, 'Build script must not create a Whale sidebar package');
@@ -42,6 +44,8 @@ assert.match(completionGuard, /validation\.main_chrome\s*\|\|\s*validation\.main
 assert.match(completionGuard, /UNVERIFIED\|NOT_READY\|blocked/, 'Completion guard should classify UNVERIFIED_* values as scoped non-release states');
 assert.doesNotMatch(readinessScript, /Start-MainChromeQa|qa:main:chrome:plan|qa:main:chrome:start|restart with remote debugging/i, 'Readiness output must not route managers to separate Chrome profile launch helpers');
 assert.match(readinessScript, /Computer Use/, 'Readiness output should route unavailable CDP cases to manager-visible Computer Use evidence');
+assert.doesNotMatch(readinessScript, /ask the manager to .*provide|provide\/enable a controllable Chrome plugin|enable a controllable Chrome plugin/i, 'Readiness output must keep browser tooling retry conditions agent-owned');
+assert.match(readinessScript, /Keep PR #5 Draft[\s\S]*manager-visible Chrome is foreground[\s\S]*real extension action popup internals by label/, 'Readiness output should preserve the bounded Chrome real-use retry condition');
 assert.doesNotMatch(browserQaCleanupScript, /whale|Whale|WHALE|9223/, 'Browser QA cleanup must not target Whale or old Whale QA ports in Chrome-only scope');
 assert.doesNotMatch(popupJs, /showWhaleSidebar|sidebarAction\.show|platform\?\.isWhale\(\)/, 'Popup tier manager must not leave Chrome popup flow for Whale sidebar');
 

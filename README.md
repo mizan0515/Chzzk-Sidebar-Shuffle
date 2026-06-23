@@ -72,7 +72,7 @@ The required real-use path is:
 5. Open tier management from inside the popup, use the back button, and return to the home screen.
 6. On `https://chzzk.naver.com/following`, verify favorites, F5 reload order, group shuffle, same-tier drag/drop order, viewer-count layout, and offline tracked streamers.
 
-If the session cannot attach to the logged-in Chrome browser, report `UNVERIFIED_MAIN_CHROME_LOGIN_REQUIRED` and ask the manager to open/log in to Chrome or provide a controllable Chrome plugin/session. Do not substitute isolated Chromium or direct popup URL evidence.
+If the session cannot attach to the logged-in Chrome browser, report `UNVERIFIED_MAIN_CHROME_LOGIN_REQUIRED`, keep the PR draft, and retry only when manager-visible Chrome is foreground on `chzzk.naver.com` with the toolbar/action area visible or when an approved Chrome/CDP/Computer Use route exposes the real extension action popup internals by label. Do not substitute isolated Chromium or direct popup URL evidence.
 
 ## Browser QA Cleanup
 
